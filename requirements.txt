@@ -1,0 +1,16 @@
+# Основные зависимости для чатбота ВОККДЦ
+flask==3.0.0
+flask-cors==4.0.0
+gunicorn==21.2.0
+requests==2.31.0
+python-dotenv==1.0.0
+
+# Для RAG-системы (если используется)
+# sentence-transformers==2.2.2
+# chromadb==0.4.15
+# langchain==0.0.350
+# pymupdf==1.23.8
+
+# Для мониторинга и логирования
+psutil==5.9.6
+prometheus-client==0.19.0

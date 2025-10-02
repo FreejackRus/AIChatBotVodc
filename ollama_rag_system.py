@@ -256,6 +256,95 @@ class OllamaRAGSystem:
                 "sources": [],
                 "confidence": 0.0
             }
+
+    def stream_query(self, query: str, top_k: int = 5):
+        """Потоковая обработка запроса: сначала отдаём метаданные, затем токены ответа.
+
+        Возвращает генератор событий-словарей вида:
+        - {"type": "meta", "sources": [...], "confidence": float}
+        - {"type": "token", "text": str}
+        - {"type": "done", "response": str}
+        """
+        try:
+            # Поиск релевантных чанков
+            similar_chunks = self.search_similar_chunks(query, top_k)
+
+            if not similar_chunks:
+                yield {
+                    "type": "meta",
+                    "sources": [],
+                    "confidence": 0.0
+                }
+                yield {
+                    "type": "done",
+                    "response": "Извините, я не нашел релевантной информации для ответа на ваш вопрос."
+                }
+                return
+
+            # Извлечение чанков и оценок сходства
+            chunks = [chunk for chunk, _ in similar_chunks]
+            similarities = [sim for _, sim in similar_chunks]
+
+            # Формирование источников и уверенности
+            sources = []
+            for chunk, similarity in similar_chunks:
+                sources.append({
+                    "file": chunk.source,
+                    "chunk_id": chunk.chunk_id,
+                    "similarity": round(similarity, 3),
+                    "text": chunk.text[:200] + "..." if len(chunk.text) > 200 else chunk.text
+                })
+            confidence = (sum(similarities) / len(similarities)) if similarities else 0.0
+
+            # Отправляем метаданные первыми
+            yield {
+                "type": "meta",
+                "sources": sources,
+                "confidence": round(confidence, 3)
+            }
+
+            # Создание промпта как в generate_response
+            context_text = "\n\n".join([chunk.text for chunk in context_chunks]) if (context_chunks := chunks) else ""
+            prompt = f"""Ты - помощник Воронежского областного клинико-диагностического центра (ВОККДЦ).
+        Используй следующую информацию из базы знаний ВОККДЦ для ответа на вопрос пациента:
+
+        КОНТЕКСТ ИЗ БАЗЫ ЗНАНИЙ:
+        {context_text}
+
+        ВОПРОС ПАЦИЕНТА:
+        {query}
+
+        ИНСТРУКЦИИ:
+        1. Отвечай только на русском языке.
+        2. Будь вежливым и профессиональным.
+        3. Используй только информацию из контекста.
+        4. Если в контексте нет ответа, честно скажи об этом.
+        5. Предложи обратиться на горячую линию ВОККДЦ: +7 (473) 202-22-22.
+        6. Не добавляй приветствие, обращения или формальные подписи. Сразу отвечай по сути.
+
+        ОТВЕТ:"""
+
+            # Потоковая генерация текста через Ollama
+            accumulated = []
+            try:
+                for chunk in self.ollama.stream_generate_text(
+                    prompt=prompt,
+                    temperature=0.3,
+                    max_tokens=1024
+                ):
+                    text = chunk.get("response") or chunk.get("text") or ""
+                    if text:
+                        accumulated.append(text)
+                        yield {"type": "token", "text": text}
+
+                final_text = ("".join(accumulated)).strip()
+                yield {"type": "done", "response": final_text}
+            except Exception as e:
+                yield {"type": "done", "response": f"Извините, произошла ошибка при генерации ответа: {str(e)}"}
+        except Exception as e:
+            # Общая ошибка
+            yield {"type": "meta", "sources": [], "confidence": 0.0}
+            yield {"type": "done", "response": f"Извините, произошла ошибка при обработке запроса: {str(e)}"}
     
     def save_vector_store(self):
         """Сохранение векторной базы в файл"""

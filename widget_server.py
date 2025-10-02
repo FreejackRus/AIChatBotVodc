@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template_string, send_from_directory
+from flask import Response
 from flask_cors import CORS
 import json
 import os
@@ -561,6 +562,43 @@ def chat():
             "details": str(e),
             "status": "error"
         }), 500
+
+# SSE поток для чата
+@app.route('/chat/stream', methods=['GET'])
+def chat_stream():
+    """SSE endpoint: принимает query параметр message и необязательный session_id."""
+    try:
+        user_message = request.args.get('message', '').strip()
+        session_id = request.args.get('session_id')
+        if not user_message:
+            return jsonify({"error": "Сообщение не может быть пустым"}), 400
+
+        session = get_or_create_session(session_id)
+
+        def sse_gen():
+            # Если доступен RAG, стримим; иначе отдаем единовременно локальный ответ
+            if session.ollama_rag:
+                for event in session.ollama_rag.stream_query(user_message):
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            elif session.rag_bot:
+                answer = session.rag_bot.send_message(user_message)
+                meta = {"type": "meta", "sources": ["offline"], "confidence": 0.85}
+                yield f"data: {json.dumps(meta, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({"type": "token", "text": answer}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({"type": "done", "response": answer}, ensure_ascii=False)}\n\n"
+            else:
+                fallback = "Извините, в данный момент AI система недоступна. Пожалуйста, обратитесь на горячую линию ВОККДЦ: +7 (473) 202-22-22"
+                yield f"data: {json.dumps({"type": "done", "response": fallback}, ensure_ascii=False)}\n\n"
+
+        headers = {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        }
+        return Response(sse_gen(), headers=headers)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/health')
 def health_check():

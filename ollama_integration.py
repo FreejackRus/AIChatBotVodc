@@ -14,6 +14,8 @@ class OllamaAPI:
         self.api_generate_url = f"{self.base_url}/api/generate"
         self.api_tags_url = f"{self.base_url}/api/tags"
         self.conversation_history = []
+        # Streaming chunk size control for requests
+        self._stream_timeout = 300
         
     def check_connection(self) -> bool:
         """Проверка подключения к Ollama"""
@@ -129,6 +131,79 @@ class OllamaAPI:
             return "Ошибка: превышено время ожидания ответа"
         except Exception as e:
             return f"Ошибка при отправке сообщения: {str(e)}"
+
+    def stream_chat(self, message: str, system_prompt: Optional[str] = None,
+                    temperature: float = 0.7, max_tokens: int = 2048):
+        """Потоковая отправка сообщения модели через чат API. Возвращает генератор текста."""
+        if not self.check_connection():
+            yield "Ошибка: не удалось подключиться к Ollama"
+            return
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.extend(self.conversation_history)
+        messages.append({"role": "user", "content": message})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "top_p": 0.9,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+        }
+
+        try:
+            with requests.post(
+                self.api_chat_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=self._stream_timeout,
+                stream=True
+            ) as resp:
+                if resp.status_code != 200:
+                    yield f"Ошибка: {resp.status_code} - {resp.text}"
+                    return
+
+                accumulated = []
+                for line in resp.iter_lines(decode_unicode=True):
+                    if not line:
+                        continue
+                    # Ollama streams JSON objects per line
+                    try:
+                        data = json.loads(line)
+                    except Exception:
+                        # Non-JSON lines are ignored
+                        continue
+
+                    # Chat API streams chunks under message.content
+                    msg = data.get("message", {})
+                    chunk = msg.get("content", "")
+                    if chunk:
+                        accumulated.append(chunk)
+                        yield chunk
+
+                    # Stop when 'done' or final object appears
+                    if data.get("done") is True:
+                        break
+
+                # Update conversation history after completion
+                full_text = "".join(accumulated)
+                self.conversation_history.append({"role": "user", "content": message})
+                self.conversation_history.append({"role": "assistant", "content": full_text})
+                if len(self.conversation_history) > 20:
+                    self.conversation_history = self.conversation_history[-20:]
+        except requests.exceptions.Timeout:
+            yield "Ошибка: превышено время ожидания ответа"
+        except requests.exceptions.ConnectionError:
+            yield "Ошибка: потеряно соединение с Ollama"
+        except Exception as e:
+            yield f"Ошибка при потоковой отправке сообщения: {str(e)}"
     
     def generate_text(self, prompt: str, system_prompt: Optional[str] = None,
                      temperature: float = 0.7, max_tokens: int = 2048) -> str:
@@ -211,6 +286,65 @@ class OllamaAPI:
             if self.verbose:
                 print(f"💥 {error_msg}")
             return error_msg
+
+    def stream_generate_text(self, prompt: str, system_prompt: Optional[str] = None,
+                              temperature: float = 0.7, max_tokens: int = 2048):
+        """Потоковая генерация текста через generate API. Возвращает генератор текста."""
+        if not self.check_connection():
+            yield "Ошибка: не удалось подключиться к Ollama"
+            return
+
+        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+
+        payload = {
+            "model": self.model,
+            "prompt": full_prompt,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "top_p": 0.9,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+        }
+
+        try:
+            with requests.post(
+                self.api_generate_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=self._stream_timeout,
+                stream=True
+            ) as resp:
+                if resp.status_code != 200:
+                    yield f"Ошибка: {resp.status_code} - {resp.text}"
+                    return
+
+                accumulated = []
+                for line in resp.iter_lines(decode_unicode=True):
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except Exception:
+                        continue
+
+                    # Generate API streams chunks under 'response'
+                    chunk = data.get("response", "")
+                    if chunk:
+                        accumulated.append(chunk)
+                        yield chunk
+                    if data.get("done") is True:
+                        break
+
+                # Optionally, we could record generation in history
+        except requests.exceptions.Timeout:
+            yield "Ошибка: превышено время ожидания ответа"
+        except requests.exceptions.ConnectionError:
+            yield "Ошибка: потеряно соединение с Ollama"
+        except Exception as e:
+            yield f"Ошибка при потоковой генерации: {str(e)}"
     
     def clear_history(self):
         """Очистка истории разговора"""

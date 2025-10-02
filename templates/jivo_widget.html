@@ -453,32 +453,45 @@
                 }
             }
 
-            addMessage(content, isUser = false) {
+            addMessage(content, isUser = false, id = null) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
-                
+                if (id) messageDiv.dataset.id = id;
+
                 const avatar = document.createElement('div');
                 avatar.className = 'message-avatar';
                 avatar.textContent = isUser ? '👤' : '🚀';
-                
+
                 const contentWrapper = document.createElement('div');
-                
+
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
                 contentDiv.textContent = content;
-                
+
                 const timeDiv = document.createElement('div');
                 timeDiv.className = 'message-time';
                 timeDiv.textContent = this.getCurrentTime();
-                
+
                 contentWrapper.appendChild(contentDiv);
                 contentWrapper.appendChild(timeDiv);
-                
+
                 messageDiv.appendChild(isUser ? contentWrapper : avatar);
                 messageDiv.appendChild(isUser ? avatar : contentWrapper);
-                
+
                 this.chatMessages.appendChild(messageDiv);
                 this.scrollToBottom();
+            }
+
+            updateMessage(id, newText) {
+                const messages = Array.from(this.chatMessages.querySelectorAll('.message'));
+                const target = messages.find(el => el.dataset && el.dataset.id === id);
+                if (target) {
+                    const contentDiv = target.querySelector('.message-content');
+                    if (contentDiv) {
+                        contentDiv.textContent = newText;
+                        this.scrollToBottom();
+                    }
+                }
             }
 
             getCurrentTime() {
@@ -519,32 +532,56 @@
                 this.sendButton.disabled = true;
 
                 try {
-                    const response = await fetch('/chat', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            message: message,
-                            session_id: this.sessionId
-                        })
+                    // Плейсхолдер для потокового ответа бота
+                    const placeholderId = `bot-${Date.now()}`;
+                    this.addMessage('', false, placeholderId);
+
+                    const params = new URLSearchParams({
+                        message: message,
+                        session_id: this.sessionId
                     });
+                    const sseUrl = `/chat/stream?${params.toString()}`;
 
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
+                    const source = new EventSource(sseUrl);
+                    let fullText = '';
 
-                    const data = await response.json();
-                    
-                    // Скрываем индикатор набора текста
-                    this.hideTypingIndicator();
-                    
-                    // Добавляем ответ бота
-                    setTimeout(() => {
-                        this.addMessage(data.response);
+                    source.onmessage = (event) => {
+                        try {
+                            const payload = JSON.parse(event.data);
+                            if (payload.type === 'meta') {
+                                // Можно показать источники/уверенность
+                                return;
+                            }
+                            if (payload.type === 'token') {
+                                const t = payload.text || '';
+                                fullText += t;
+                                this.updateMessage(placeholderId, fullText);
+                                return;
+                            }
+                            if (payload.type === 'done') {
+                                const final = payload.response || fullText;
+                                this.updateMessage(placeholderId, final);
+                                this.hideTypingIndicator();
+                                this.isTyping = false;
+                                this.sendButton.disabled = false;
+                                source.close();
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('Bad SSE payload', e, event.data);
+                        }
+                    };
+
+                    source.onerror = (err) => {
+                        console.error('SSE error', err);
+                        source.close();
+                        this.hideTypingIndicator();
+                        if (!fullText) {
+                            this.updateMessage(placeholderId, 'Произошла ошибка при получении ответа. Пожалуйста, попробуйте позже.');
+                        }
                         this.isTyping = false;
                         this.sendButton.disabled = false;
-                    }, 500);
+                    };
 
                 } catch (error) {
                     console.error('Error:', error);

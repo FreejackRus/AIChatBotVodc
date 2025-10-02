@@ -4,20 +4,22 @@ import time
 from typing import Optional, Dict, Any
 
 class LocalChatBot:
-    def __init__(self, base_url: str = "http://localhost:1234"):
-        self.base_url = base_url
-        self.api_url = f"{base_url}/v1/chat/completions"
+    def __init__(self, base_url: str = "http://localhost:11434"):
+        self.base_url = base_url.rstrip('/')
+        self.api_url = f"{self.base_url}/api/chat"
+        self.tags_url = f"{self.base_url}/api/tags"
         self.model = None
         self.conversation_history = []
         
     def check_connection(self) -> bool:
         """Проверка подключения к Ollama"""
         try:
-            response = requests.get(f"{self.base_url}/v1/models")
+            response = requests.get(self.tags_url, timeout=10)
             if response.status_code == 200:
                 models = response.json()
-                if models.get('data'):
-                    self.model = models['data'][0]['id']
+                if 'models' in models and len(models['models']) > 0:
+                    available_models = [m['name'] for m in models['models']]
+                    self.model = available_models[0]
                     print(f"✅ Подключено к Ollama")
                     print(f"📋 Доступная модель: {self.model}")
                     return True
@@ -54,20 +56,26 @@ class LocalChatBot:
             payload = {
                 "model": self.model,
                 "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 2048,
-                "stream": False
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 2048,
+                    "top_p": 0.9,
+                    "frequency_penalty": 0.0,
+                    "presence_penalty": 0.0
+                }
             }
-            
+
             response = requests.post(
                 self.api_url,
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=60
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
-                assistant_message = result['choices'][0]['message']['content']
+                assistant_message = result['message']['content']
                 
                 # Сохранение в историю
                 self.conversation_history.append({"role": "user", "content": message})

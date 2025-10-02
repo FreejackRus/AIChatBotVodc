@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 from typing import List, Optional
@@ -5,18 +6,30 @@ from typing import List, Optional
 class EmbeddingAPI:
     """API для генерации эмбеддингов через Ollama"""
     
-    def __init__(self, base_url: str = "http://localhost:1234"):
-        self.base_url = base_url
-        self.embedding_endpoint = f"{base_url}/v1/embeddings"
-        self.models_endpoint = f"{base_url}/v1/models"
+    def __init__(self, base_url: str = None, embedding_model: Optional[str] = None):
+        # Базовый URL берём из окружения или используем дефолт Ollama
+        env_url = os.getenv("OLLAMA_URL") or os.getenv("OLLAMA_HOST")
+        self.base_url = (base_url or env_url or "http://localhost:11434").rstrip("/")
+        # Эндпоинты Ollama
+        self.embedding_endpoint = f"{self.base_url}/api/embeddings"
+        self.models_endpoint = f"{self.base_url}/api/tags"
+        # Модель эмбеддингов
+        self.embedding_model = embedding_model or os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
     
     def get_available_models(self) -> List[str]:
-        """Получить список доступных моделей"""
+        """Получить список доступных моделей (тегов) из Ollama"""
         try:
-            response = requests.get(self.models_endpoint)
+            response = requests.get(self.models_endpoint, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                return [model["id"] for model in data.get("data", [])]
+                models = data.get("models") or data.get("data") or []
+                names = []
+                for model in models:
+                    # Ollama возвращает список с ключом 'name'
+                    name = model.get("name") or model.get("id") or model.get("model")
+                    if name:
+                        names.append(name)
+                return names
             else:
                 print(f"Ошибка при получении списка моделей: {response.status_code}")
                 return []
@@ -24,35 +37,33 @@ class EmbeddingAPI:
             print(f"Ошибка при подключении к Ollama: {e}")
             return []
     
-    def get_embedding(self, text: str, model: str = None) -> Optional[List[float]]:
-        """Получить эмбеддинг для текста"""
+    def get_embedding(self, text: str, model: Optional[str] = None) -> Optional[List[float]]:
+        """Получить эмбеддинг для текста через Ollama /api/embeddings"""
         try:
             payload = {
-                "input": text,
-                "model": model or "text-embedding-ada-002"  # Значение по умолчанию
+                "model": model or self.embedding_model,
+                "prompt": text
             }
-            
             response = requests.post(
                 self.embedding_endpoint,
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=20
             )
-            
             if response.status_code == 200:
                 data = response.json()
-                embedding = data.get("data", [{}])[0].get("embedding")
+                embedding = data.get("embedding")
                 return embedding
             else:
                 print(f"Ошибка при генерации эмбеддинга: {response.status_code}")
                 print(f"Ответ: {response.text}")
                 return None
-                
         except Exception as e:
             print(f"Ошибка при генерации эмбеддинга: {e}")
             return None
     
-    def get_embeddings_batch(self, texts: List[str], model: str = None) -> List[Optional[List[float]]]:
-        """Получить эмбеддинги для списка текстов"""
+    def get_embeddings_batch(self, texts: List[str], model: Optional[str] = None) -> List[Optional[List[float]]]:
+        """Получить эмбеддинги для списка текстов (итеративно)"""
         embeddings = []
         for text in texts:
             embedding = self.get_embedding(text, model)

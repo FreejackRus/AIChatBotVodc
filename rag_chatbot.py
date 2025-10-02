@@ -16,10 +16,10 @@ from synonym_dictionary import expand_synonyms
 class RAGChatBot:
     """Чатбот с поддержкой RAG (Retrieval-Augmented Generation)"""
     
-    def __init__(self, base_url: str = "http://localhost:1234", use_mock_embeddings: bool = False):
-        self.base_url = base_url
-        self.chat_endpoint = f"{base_url}/v1/chat/completions"
-        self.models_endpoint = f"{base_url}/v1/models"
+    def __init__(self, base_url: str = "http://localhost:11434", use_mock_embeddings: bool = False):
+        self.base_url = base_url.rstrip("/")
+        self.chat_endpoint = f"{self.base_url}/api/chat"
+        self.models_endpoint = f"{self.base_url}/api/tags"
         
         # Инициализация компонентов
         self.console = Console()
@@ -29,7 +29,7 @@ class RAGChatBot:
         if use_mock_embeddings:
             self.embedding_api = MockEmbeddingAPI()
         else:
-            self.embedding_api = EmbeddingAPI(base_url)
+            self.embedding_api = EmbeddingAPI(self.base_url)
         
         # Текущие настройки
         self.current_model = None
@@ -54,12 +54,18 @@ class RAGChatBot:
         self.load_vodc_knowledge_base()
     
     def get_available_models(self) -> List[str]:
-        """Получить списко доступных моделей"""
+        """Получить списко доступных моделей из Ollama"""
         try:
-            response = requests.get(self.models_endpoint)
+            response = requests.get(self.models_endpoint, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                return [model["id"] for model in data.get("data", [])]
+                models = data.get("models") or data.get("data") or []
+                names = []
+                for m in models:
+                    name = m.get("name") or m.get("id") or m.get("model")
+                    if name:
+                        names.append(name)
+                return names
             else:
                 print(f"{Fore.RED}Ошибка при получении списка моделей: {response.status_code}{Style.RESET_ALL}")
                 return []
@@ -125,19 +131,28 @@ class RAGChatBot:
             payload = {
                 "model": self.current_model,
                 "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 2000
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 2000,
+                    "top_p": 0.9
+                }
             }
             
             response = requests.post(
                 self.chat_endpoint,
                 json=payload,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=30
             )
             
             if response.status_code == 200:
                 data = response.json()
-                assistant_message = data["choices"][0]["message"]["content"]
+                assistant_message = (
+                    data.get("message", {}).get("content")
+                    or (data.get("choices", [{}])[0].get("message", {}).get("content"))
+                    or ""
+                )
                 
                 # Обновляем историю
                 self.conversation_history.append({"role": "user", "content": message})
@@ -145,7 +160,7 @@ class RAGChatBot:
                 
                 # Обновляем статистику
                 self.stats["total_messages"] += 1
-                self.stats["total_tokens"] += data.get("usage", {}).get("total_tokens", 0)
+                # У Ollama нет стандартного поля usage, поэтому пропускаем токены
                 
                 return assistant_message
             else:

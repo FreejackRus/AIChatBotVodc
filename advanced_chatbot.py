@@ -7,9 +7,10 @@ from datetime import datetime
 from system_prompts import SYSTEM_PROMPTS, get_prompt, list_available_prompts, get_prompt_name
 
 class AdvancedLocalChatBot:
-    def __init__(self, base_url: str = "http://localhost:1234"):
-        self.base_url = base_url
-        self.api_url = f"{base_url}/v1/chat/completions"
+    def __init__(self, base_url: str = "http://localhost:11434"):
+        self.base_url = base_url.rstrip("/")
+        self.api_url = f"{self.base_url}/api/chat"
+        self.models_endpoint = f"{self.base_url}/api/tags"
         self.model = None
         self.conversation_history = []
         self.current_prompt_key = "general_assistant"
@@ -23,11 +24,13 @@ class AdvancedLocalChatBot:
     def check_connection(self) -> bool:
         """Проверка подключения к Ollama"""
         try:
-            response = requests.get(f"{self.base_url}/v1/models", timeout=5)
+            response = requests.get(self.models_endpoint, timeout=5)
             if response.status_code == 200:
-                models = response.json()
-                if models.get('data'):
-                    self.model = models['data'][0]['id']
+                data = response.json()
+                models = data.get("models") or data.get("data") or []
+                if models:
+                    first = models[0]
+                    self.model = first.get("name") or first.get("id") or first.get("model")
                     print(f"✅ Подключено к Ollama")
                     print(f"📋 Доступная модель: {self.model}")
                     return True
@@ -39,7 +42,7 @@ class AdvancedLocalChatBot:
                 return False
         except requests.exceptions.ConnectionError:
             print("❌ Не удалось подключиться к Ollama")
-        print("Убедитесь, что Ollama запущен и сервер активен")
+            print("Убедитесь, что Ollama запущен и сервер активен")
             return False
         except requests.exceptions.Timeout:
             print("❌ Превышено время ожидания подключения")
@@ -80,12 +83,14 @@ class AdvancedLocalChatBot:
             payload = {
                 "model": self.model,
                 "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 2048,
                 "stream": False,
-                "top_p": 0.9,
-                "frequency_penalty": 0.0,
-                "presence_penalty": 0.0
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 2048,
+                    "top_p": 0.9,
+                    "frequency_penalty": 0.0,
+                    "presence_penalty": 0.0
+                }
             }
             
             response = requests.post(
@@ -97,7 +102,11 @@ class AdvancedLocalChatBot:
             
             if response.status_code == 200:
                 result = response.json()
-                assistant_message = result['choices'][0]['message']['content']
+                assistant_message = (
+                    result.get("message", {}).get("content")
+                    or (result.get("choices", [{}])[0].get("message", {}).get("content"))
+                    or ""
+                )
                 
                 # Сохранение в историю
                 self.conversation_history.append({"role": "user", "content": message})

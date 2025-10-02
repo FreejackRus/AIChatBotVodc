@@ -6,7 +6,7 @@ import time
 class OllamaAPI:
     """Интеграция с Ollama API для работы с локальными моделями"""
     
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.2:3b", verbose: bool = True):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS", verbose: bool = True):
         self.base_url = base_url.rstrip('/')
         self.model = model
         self.verbose = verbose

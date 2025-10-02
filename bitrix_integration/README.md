@@ -76,7 +76,7 @@ $APPLICATION->IncludeComponent(
 
 | Параметр | Описание | Значения по умолчанию |
 |----------|----------|----------------------|
-| `SERVER_URL` | URL Flask-сервера | `http://localhost:5000` |
+| `SERVER_URL` | URL Flask-сервера | `http://your-server-domain:8085` |
 | `WIDGET_POSITION` | Позиция виджета | `bottom-right` |
 | `THEME` | Тема оформления | `vodc` |
 | `SHOW_HEADER` | Показывать заголовок | `Y` |

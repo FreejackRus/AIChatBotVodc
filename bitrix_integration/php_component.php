@@ -14,7 +14,7 @@ class VodcChatbotComponent extends CBitrixComponent
     public function onPrepareComponentParams($arParams)
     {
         // Параметры по умолчанию
-        $arParams['SERVER_URL'] = isset($arParams['SERVER_URL']) ? $arParams['SERVER_URL'] : 'http://localhost:5000';
+        $arParams['SERVER_URL'] = isset($arParams['SERVER_URL']) ? $arParams['SERVER_URL'] : 'http://your-server-domain:8085'; // Замените на ваш домен или IP-адрес
         $arParams['WIDGET_POSITION'] = isset($arParams['WIDGET_POSITION']) ? $arParams['WIDGET_POSITION'] : 'bottom-right';
         $arParams['THEME'] = isset($arParams['THEME']) ? $arParams['THEME'] : 'vodc';
         $arParams['SHOW_HEADER'] = isset($arParams['SHOW_HEADER']) ? $arParams['SHOW_HEADER'] : 'Y';

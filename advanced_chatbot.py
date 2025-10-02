@@ -21,14 +21,14 @@ class AdvancedLocalChatBot:
             os.makedirs(self.conversations_dir)
     
     def check_connection(self) -> bool:
-        """Проверка подключения к LM Studio"""
+        """Проверка подключения к Ollama"""
         try:
             response = requests.get(f"{self.base_url}/v1/models", timeout=5)
             if response.status_code == 200:
                 models = response.json()
                 if models.get('data'):
                     self.model = models['data'][0]['id']
-                    print(f"✅ Подключено к LM Studio")
+                    print(f"✅ Подключено к Ollama")
                     print(f"📋 Доступная модель: {self.model}")
                     return True
                 else:
@@ -38,8 +38,8 @@ class AdvancedLocalChatBot:
                 print(f"❌ Ошибка подключения: {response.status_code}")
                 return False
         except requests.exceptions.ConnectionError:
-            print("❌ Не удалось подключиться к LM Studio")
-            print("Убедитесь, что LM Studio запущен и сервер активен")
+            print("❌ Не удалось подключиться к Ollama")
+        print("Убедитесь, что Ollama запущен и сервер активен")
             return False
         except requests.exceptions.Timeout:
             print("❌ Превышено время ожидания подключения")
@@ -62,7 +62,7 @@ class AdvancedLocalChatBot:
         """Отправка сообщения модели"""
         if not self.model:
             if not self.check_connection():
-                return "Ошибка: не удалось подключиться к LM Studio"
+                return "Ошибка: не удалось подключиться к Ollama"
         
         # Формирование контекста с историей разговора
         messages = []
@@ -211,7 +211,7 @@ class AdvancedLocalChatBot:
 
 def main():
     """Расширенный интерактивный режим чатбота"""
-    print("🤖 Расширенный локальный чатбот на базе LM Studio")
+    print("🤖 Расширенный локальный чатбот на базе Ollama")
     print("=" * 60)
     
     chatbot = AdvancedLocalChatBot()

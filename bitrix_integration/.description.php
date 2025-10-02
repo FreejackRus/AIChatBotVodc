@@ -20,7 +20,7 @@ $arComponentDescription = array(
         "SERVER_URL" => array(
             "NAME" => "URL сервера чатбота",
             "TYPE" => "STRING",
-            "DEFAULT" => "http://localhost:5000",
+            "DEFAULT" => "http://your-server-domain:8085", // Замените на ваш домен или IP-адрес
             "PARENT" => "BASE"
         ),
         "WIDGET_POSITION" => array(

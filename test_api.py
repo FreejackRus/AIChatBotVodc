@@ -8,7 +8,7 @@ import json
 
 def test_chatbot():
     """Тестируем чатбота через API"""
-    url = "http://localhost:5000/chat"
+    url = "http://localhost:8085/chat"
     
     test_questions = [
         "ВОККДЦ",

@@ -2,7 +2,7 @@ class ChatWidget {
     constructor() {
         this.isMinimized = false;
         this.isTyping = false;
-        this.apiEndpoint = 'http://localhost:5000/chat'; // Будет изменено при создании сервера
+        this.apiEndpoint = 'http://localhost:8085/chat'; // Будет изменено при создании сервера
         this.initializeElements();
         this.bindEvents();
         this.setInitialTime();

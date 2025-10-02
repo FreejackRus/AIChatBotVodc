@@ -14,13 +14,13 @@ def test_user_session(session_id, user_name):
     
     try:
         # Первое сообщение
-        response1 = requests.post('http://localhost:5000/chat', 
+        response1 = requests.post('http://localhost:8085/chat', 
                                  json={'message': 'Что такое ВОККДЦ?', 'session_id': session_id})
         data1 = response1.json()
         print(f"  {user_name}: ✓ Первое сообщение получено (session_id: {data1['session_id']})")
         
         # Второе сообщение
-        response2 = requests.post('http://localhost:5000/chat', 
+        response2 = requests.post('http://localhost:8085/chat', 
                                  json={'message': 'Как записаться?', 'session_id': session_id})
         data2 = response2.json()
         print(f"  {user_name}: ✓ Второе сообщение получено (session_id: {data2['session_id']})")
@@ -71,7 +71,7 @@ def test_parallel_users():
     
     # Проверяем общее состояние
     try:
-        health = requests.get('http://localhost:5000/health').json()
+        health = requests.get('http://localhost:8085/health').json()
         print(f"\n📊 Общая статистика:")
         print(f"  Активных сессий: {health['active_sessions']}")
         print(f"  Статус RAG-системы: {health['rag_system']}")
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     
     # Проверяем, что сервер доступен
     try:
-        response = requests.get('http://localhost:5000/health')
+        response = requests.get('http://localhost:8085/health')
         print("✅ Сервер доступен")
     except:
         print("❌ Сервер не доступен. Запустите widget_server.py")

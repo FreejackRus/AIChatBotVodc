@@ -12,7 +12,7 @@ $APPLICATION->IncludeComponent(
     "vodc:chatbot", 
     ".default", 
     array(
-        "SERVER_URL" => "http://localhost:5000", // URL вашего Flask-сервера
+        "SERVER_URL" => "http://your-server-domain:8085", // URL вашего Flask-сервера (замените на ваш домен/IP)
         "WIDGET_POSITION" => "bottom-right", // bottom-left, top-right, top-left
         "THEME" => "vodc", // тема оформления
         "SHOW_HEADER" => "Y", // показывать заголовок
@@ -30,7 +30,7 @@ $arComponentParameters = array(
         "PARENT" => "BASE",
         "NAME" => "URL сервера чатбота",
         "TYPE" => "STRING",
-        "DEFAULT" => "http://localhost:5000",
+        "DEFAULT" => "http://your-server-domain:8085", // Замените на ваш домен или IP-адрес
         "DESCRIPTION" => "Адрес Flask-сервера с чатботом"
     ),
     "WIDGET_POSITION" => array(

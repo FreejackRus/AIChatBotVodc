@@ -3,7 +3,7 @@ import json
 from typing import List, Optional
 
 class EmbeddingAPI:
-    """API для генерации эмбеддингов через LM Studio"""
+    """API для генерации эмбеддингов через Ollama"""
     
     def __init__(self, base_url: str = "http://localhost:1234"):
         self.base_url = base_url
@@ -21,7 +21,7 @@ class EmbeddingAPI:
                 print(f"Ошибка при получении списка моделей: {response.status_code}")
                 return []
         except Exception as e:
-            print(f"Ошибка при подключении к LM Studio: {e}")
+            print(f"Ошибка при подключении к Ollama: {e}")
             return []
     
     def get_embedding(self, text: str, model: str = None) -> Optional[List[float]]:
@@ -60,7 +60,7 @@ class EmbeddingAPI:
         return embeddings
 
 class MockEmbeddingAPI:
-    """Мок-API для тестирования без LM Studio"""
+    """Мок-API для тестирования без Ollama"""
     
     def __init__(self, embedding_dim: int = 1536):
         self.embedding_dim = embedding_dim

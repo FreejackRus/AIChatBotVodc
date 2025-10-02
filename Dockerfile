@@ -32,7 +32,7 @@ EXPOSE 5000
 
 # Определяем переменные окружения по умолчанию
 ENV FLASK_HOST=0.0.0.0
-ENV FLASK_PORT=5000
+ENV FLASK_PORT=8085
 ENV PYTHONPATH=/app
 
 # Запускаем приложение

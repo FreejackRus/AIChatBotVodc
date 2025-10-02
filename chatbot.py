@@ -11,14 +11,14 @@ class LocalChatBot:
         self.conversation_history = []
         
     def check_connection(self) -> bool:
-        """Проверка подключения к LM Studio"""
+        """Проверка подключения к Ollama"""
         try:
             response = requests.get(f"{self.base_url}/v1/models")
             if response.status_code == 200:
                 models = response.json()
                 if models.get('data'):
                     self.model = models['data'][0]['id']
-                    print(f"✅ Подключено к LM Studio")
+                    print(f"✅ Подключено к Ollama")
                     print(f"📋 Доступная модель: {self.model}")
                     return True
                 else:
@@ -28,15 +28,15 @@ class LocalChatBot:
                 print(f"❌ Ошибка подключения: {response.status_code}")
                 return False
         except requests.exceptions.ConnectionError:
-            print("❌ Не удалось подключиться к LM Studio")
-            print("Убедитесь, что LM Studio запущен и сервер активен")
+            print("❌ Не удалось подключиться к Ollama")
+            print("Убедитесь, что Ollama запущен и сервер активен")
             return False
     
     def send_message(self, message: str, system_prompt: Optional[str] = None) -> str:
         """Отправка сообщения модели"""
         if not self.model:
             if not self.check_connection():
-                return "Ошибка: не удалось подключиться к LM Studio"
+                return "Ошибка: не удалось подключиться к Ollama"
         
         # Формирование контекста с историей разговора
         messages = []
@@ -110,7 +110,7 @@ class LocalChatBot:
 
 def main():
     """Интерактивный режим чатбота"""
-    print("🤖 Локальный чатбот на базе LM Studio")
+    print("🤖 Локальный чатбот на базе Ollama")
     print("=" * 50)
     
     # Системные промпты для разных режимов

@@ -9,7 +9,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
 // Параметры компонента
 $arDefaultParams = array(
-    "SERVER_URL" => "http://localhost:5000",
+    "SERVER_URL" => "http://your-server-domain:8085", // Замените на ваш домен или IP-адрес
     "WIDGET_POSITION" => "bottom-right",
     "THEME" => "vodc",
     "SHOW_HEADER" => "Y",

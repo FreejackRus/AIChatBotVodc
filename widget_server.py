@@ -1,10 +1,14 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from flask_cors import CORS
 import json
 import os
 import sys
 from datetime import datetime
 import uuid
+import time
+from dotenv import load_dotenv
+from ollama_integration import OllamaAPI, OllamaRAGChatBot
+from ollama_rag_system import OllamaRAGSystem
 
 # Добавляем путь к текущей директории для импорта модулей
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,45 +22,141 @@ try:
     RAG_AVAILABLE = True
 except ImportError as e:
     print(f"❌ Ошибка импорта RAG-модулей: {e}")
-    print("Создаем заглушку для RAG-системы...")
+    print("Используем Ollama-интеграцию...")
     RAG_AVAILABLE = False
     
     # Создаем заглушку для демонстрации
     class RAGChatBot:
         def __init__(self, use_mock_embeddings=False):
-            self.knowledge_base = {"ВОККДЦ": "Всероссийский образовательный центр космонавтики и дополнительного образования детей"}
+            self.knowledge_base = {"ВОККДЦ": "Воронежский областной клинико-диагностический центр"}
         
         def send_message(self, question):
             return f"Я получил ваш вопрос: '{question}'. В реальной системе здесь будет ответ от RAG-системы ВОККДЦ с использованием базы знаний."
 
+# Локальный офлайн-бот для резервного режима (без сетевых запросов)
+class LocalFallbackChatBot:
+    def __init__(self):
+        # Простые ответы по ключевым словам
+        self.hotline = "+7 (473) 202-22-22"
+        self.address = "г. Воронеж, ул. Студенческая, 10 (пример)"
+        self.hours = "Пн–Пт: 8:00–18:00, Сб: 9:00–14:00, Вс: выходной"
+    
+    def send_message(self, question: str) -> str:
+        q = (question or "").lower()
+        if any(k in q for k in ["телефон", "горяч", "контакт", "позвон"]):
+            return f"Горячая линия ВОККДЦ: {self.hotline}. Чем еще помочь?"
+        if any(k in q for k in ["адрес", "как добраться", "где находитс"]):
+            return f"Адрес ВОККДЦ: {self.address}. Уточнить расписание можно по телефону {self.hotline}."
+        if any(k in q for k in ["режим", "часы", "время работы", "расписание"]):
+            return f"Режим работы: {self.hours}. Для записи позвоните: {self.hotline}."
+        if any(k in q for k in ["запис", "талон", "приём", "регистратур"]):
+            return f"Запись ведется через регистратуру по телефону {self.hotline}. Также возможна запись на месте."
+        return (
+            "Я работаю в офлайн-режиме без доступа к модели. "
+            "Постараюсь помочь: уточните ваш вопрос. При необходимости обратитесь на горячую линию "
+            f"ВОККДЦ: {self.hotline}."
+        )
+
 app = Flask(__name__)
 CORS(app)  # Разрешаем CORS для всех доменов
+# Упрощаем JSON-ответы и явно задаём MIME-тип
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+app.config['JSONIFY_MIMETYPE'] = 'application/json'
+load_dotenv()  # Загружаем переменные окружения из .env, если файл существует
 
 # Хранилище сессий
 sessions = {}
+start_time = time.time()
 
 class ChatSession:
     def __init__(self, session_id):
-        self.session_id = session_id
-        self.created_at = datetime.now()
-        self.messages = []
+        """Инициализация сессии чата"""
+        print(f"🔧 Инициализирую сессию: {session_id}")
         
-        # Инициализируем RAG-систему с учетом доступности модулей
+        self.session_id = session_id
+        self.history = []
+        # Хранилище сообщений для истории сессии
+        self.messages = []
+        self.created_at = datetime.now()
+        self.ollama_rag = None
+        self.rag_bot = None
+        
+        print(f"📋 Базовые параметры сессии {session_id} установлены")
+        
+        # Инициализируем AI системы
         try:
-            if RAG_AVAILABLE:
-                # Пытаемся использовать реальную RAG-систему
-                self.rag_bot = RAGChatBot(use_mock_embeddings=False)
-                print(f"✅ RAG-чатбот инициализирован для сессии {session_id}")
-            else:
-                # Используем заглушку
-                self.rag_bot = RAGChatBot(use_mock_embeddings=False)
-                print(f"⚠️  Используется заглушка RAG-системы для сессии {session_id}")
+            print(f"🤖 Начинаю инициализацию AI систем для сессии {session_id}")
+            self._initialize_ai_systems()
+            print(f"✅ AI системы для сессии {session_id} инициализированы")
         except Exception as e:
-            print(f"❌ Ошибка инициализации RAG-системы: {e}")
-            # В крайнем случае используем заглушку
-            self.rag_bot = RAGChatBot(use_mock_embeddings=False)
+            print(f"❌ Ошибка инициализации AI систем для сессии {session_id}: {e}")
+            raise
+    
+    def _initialize_ai_systems(self):
+        """Инициализация AI систем с учетом доступности"""
+        try:
+            # Пытаемся использовать Ollama
+            ollama_url = os.getenv('OLLAMA_URL') or os.getenv('OLLAMA_HOST') or 'http://localhost:11434'
+            ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
+            
+            # Создаем OllamaAPI с включенным логированием для отладки
+            self.ollama_api = OllamaAPI(base_url=ollama_url, model=ollama_model, verbose=True)  # Включаем логирование для отладки
+            
+            # Проверяем подключение к Ollama
+            if self.ollama_api.check_connection():
+                print(f"✅ Ollama подключен для сессии {self.session_id}")
+                
+                # Инициализируем Ollama RAG систему
+                self.ollama_rag = OllamaRAGSystem(self.ollama_api)
+                
+                # Загружаем базу знаний если доступна
+                kb_path = os.getenv('KNOWLEDGE_BASE_PATH', 'knowledge_base')
+                if os.path.exists(kb_path):
+                    self._load_knowledge_base()
+                
+            else:
+                print(f"⚠️  Ollama недоступен, используем резервную систему")
+                self._initialize_fallback_system()
+                
+        except Exception as e:
+            print(f"❌ Ошибка инициализации Ollama: {e}")
+            self._initialize_fallback_system()
+    
+    def _initialize_fallback_system(self):
+        """Инициализация резервной системы"""
+        try:
+            # Всегда используем локальный офлайн-бот, чтобы избежать сетевых ошибок
+            self.rag_bot = LocalFallbackChatBot()
+            print(f"✅ Используется локальный офлайн-бот для сессии {self.session_id}")
+        except Exception as e:
+            print(f"❌ Ошибка инициализации резервной системы: {e}")
+            self.rag_bot = LocalFallbackChatBot()
+    
+    def _load_knowledge_base(self):
+        """Загрузка базы знаний"""
+        try:
+            kb_path = os.getenv('KNOWLEDGE_BASE_PATH', 'knowledge_base')
+            
+            # Проверяем наличие файлов знаний
+            knowledge_files = [
+                'vodc_complete_info.md',
+                'services_info.md',
+                'doctors_info.md'
+            ]
+            
+            for filename in knowledge_files:
+                filepath = os.path.join(kb_path, filename)
+                if os.path.exists(filepath):
+                    self.ollama_rag.add_document(filepath)
+                    print(f"✅ Загружен файл знаний: {filename}")
+            
+        except Exception as e:
+            print(f"⚠️  Ошибка загрузки базы знаний: {e}")
     
     def add_message(self, role, content):
+        # Defensive: ensure messages list exists
+        if not hasattr(self, 'messages') or self.messages is None:
+            self.messages = []
         self.messages.append({
             "role": role,
             "content": content,
@@ -64,47 +164,124 @@ class ChatSession:
         })
     
     def get_response(self, user_message):
+        """Получение ответа от AI системы"""
+        print(f"🔄 Обрабатываю запрос: {user_message[:50]}...")
+        
+        def _strip_greetings(text: str) -> str:
+            """Удаляет типовые приветствия и обращения из начала ответа."""
+            if not isinstance(text, str):
+                return text
+            greetings = [
+                "Здравствуйте", "Добрый день", "Добрый вечер", "Привет",
+                "Здравствуйте!", "Добрый день!", "Добрый вечер!", "Привет!",
+                "Здравствуйте,", "Добрый день,", "Добрый вечер,", "Привет,"
+            ]
+            cleaned = text.strip()
+            for g in greetings:
+                if cleaned.startswith(g):
+                    # Отрезаем приветствие и возможные последующие пробелы/знаки препинания
+                    cleaned = cleaned[len(g):].lstrip(" ,—-:;!.")
+                    break
+            return cleaned.strip()
+
         try:
-            # Получаем ответ от RAG-чатбота
-            answer = self.rag_bot.send_message(user_message)
+            # Пробуем использовать Ollama RAG систему
+            if self.ollama_rag:
+                print("🤖 Используем Ollama RAG систему")
+                result = self.ollama_rag.query(user_message)
+                print(f"📊 Результат от RAG системы: {result}")
+                
+                answer = _strip_greetings(result["response"]) if result.get("response") else ""
+                confidence = result["confidence"]
+                sources = [source["file"] for source in result["sources"]]
+                
+                # Добавляем сообщения в историю
+                self.add_message("user", user_message)
+                self.add_message("assistant", answer)
+                
+                response_data = {
+                    "response": answer,
+                    "confidence": confidence,
+                    "sources": sources,
+                    "session_id": self.session_id,
+                    "rag_available": True,
+                    "ai_engine": "ollama"
+                }
+                
+                print(f"✅ Возвращаю ответ: {response_data}")
+                return response_data
             
-            # Добавляем сообщения в историю
-            self.add_message("user", user_message)
-            self.add_message("assistant", answer)
+            # Используем резервную систему
+            elif self.rag_bot:
+                answer = _strip_greetings(self.rag_bot.send_message(user_message))
+                
+                # Добавляем сообщения в историю
+                self.add_message("user", user_message)
+                self.add_message("assistant", answer)
+                
+                return {
+                    "response": answer,
+                    "confidence": 0.85,
+                    "sources": ["vodc_complete_info.md"],
+                    "session_id": self.session_id,
+                    "rag_available": RAG_AVAILABLE,
+                    "ai_engine": "legacy"
+                }
             
-            return {
-                "response": answer,
-                "confidence": 0.85,
-                "sources": ["vodc_complete_info.md"],
-                "session_id": self.session_id,
-                "rag_available": RAG_AVAILABLE
-            }
+            else:
+                # Крайний случай - используем простой ответ
+                fallback_response = _strip_greetings("Извините, в данный момент AI система недоступна. Пожалуйста, обратитесь на горячую линию ВОККДЦ: +7 (473) 202-22-22")
+                
+                self.add_message("user", user_message)
+                self.add_message("assistant", fallback_response)
+                
+                return {
+                    "response": fallback_response,
+                    "confidence": 0.0,
+                    "sources": [],
+                    "session_id": self.session_id,
+                    "rag_available": False,
+                    "ai_engine": "none"
+                }
+                
         except Exception as e:
-            print(f"❌ Ошибка в RAG-чатботе: {e}")
+            print(f"❌ Ошибка в AI системе: {e}")
+            
             # Возвращаем тестовый ответ в случае ошибки
-            test_response = f"Я обработал ваш запрос: '{user_message}'. В реальной системе здесь будет ответ на основе базы знаний ВОККДЦ."
-            self.add_message("assistant", test_response)
+            error_response = _strip_greetings("Извините, произошла ошибка при обработке запроса. Пожалуйста, обратитесь на горячую линию ВОККДЦ: +7 (473) 202-22-22")
+            
+            self.add_message("assistant", error_response)
             
             return {
-                "response": test_response,
-                "confidence": 0.7,
-                "sources": ["vodc_complete_info.md"],
+                "response": error_response,
+                "confidence": 0.0,
+                "sources": [],
                 "session_id": self.session_id,
                 "error": str(e),
-                "rag_available": False
+                "rag_available": False,
+                "ai_engine": "error"
             }
 
 def get_or_create_session(session_id=None):
     """Получаем или создаем новую сессию"""
+    print(f"🔍 Ищу сессию с ID: {session_id}")
+    
     if session_id and session_id in sessions:
+        print(f"✅ Найдена существующая сессия: {session_id}")
         return sessions[session_id]
     
     # Создаем новую сессию
     new_session_id = session_id or str(uuid.uuid4())
-    session = ChatSession(new_session_id)
-    sessions[new_session_id] = session
+    print(f"🆕 Создаю новую сессию с ID: {new_session_id}")
     
-    return session
+    try:
+        session = ChatSession(new_session_id)
+        sessions[new_session_id] = session
+        print(f"✅ Сессия {new_session_id} успешно создана и сохранена")
+        return session
+    except Exception as e:
+        print(f"❌ Ошибка создания сессии: {e}")
+        raise
 
 @app.route('/')
 def index():
@@ -151,7 +328,7 @@ def index():
             <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
 &lt;!-- ВОККДЦ Jivo-виджет --&gt;
 &lt;iframe 
-    src="http://localhost:5000/jivo" 
+    src="http://localhost:8085/jivo" 
     width="100%" 
     height="100%" 
     style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 999999;"
@@ -163,7 +340,7 @@ def index():
             <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
 &lt;!-- ВОККДЦ Классический виджет --&gt;
 &lt;iframe 
-    src="http://localhost:5000/widget" 
+    src="http://localhost:8085/widget" 
     width="380" 
     height="600" 
     style="position: fixed; bottom: 20px; right: 20px; border: none; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);"
@@ -173,7 +350,7 @@ def index():
             <p>Для интеграции с Битрикс24 используйте виджет или REST API:</p>
             <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
 // В вашем PHP-обработчике Битрикс24
-$chatbotUrl = 'http://your-server.com:5000/chat';
+$chatbotUrl = 'http://your-server.com:8085/chat';
 $data = [
     'message' => $_POST['message'],
     'session_id' => $_POST['session_id'] ?? null
@@ -286,21 +463,67 @@ def widget_script():
         with open('widget/script.js', 'r', encoding='utf-8') as f:
             content = f.read()
             # Обновляем API endpoint
-            content = content.replace(
-                "this.apiEndpoint = 'http://localhost:5000/chat';",
-                f"this.apiEndpoint = '{request.host_url}chat';"
-            )
+            content = content.replace("this.apiEndpoint = 'http://localhost:8085/chat';", f"this.apiEndpoint = '{request.host_url}chat';")
+            content = content.replace("this.apiEndpoint = '/chat';", f"this.apiEndpoint = '{request.host_url}chat';")
             return content, 200, {'Content-Type': 'application/javascript'}
     except FileNotFoundError:
         return "console.log('Скрипт не найден');", 404
 
+@app.route('/static/loader.js')
+def widget_loader_script():
+    """Загрузчик виджета (инжектор)"""
+    try:
+        with open('widget/loader.js', 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Подставляем корректные пути к стилям и основному скрипту
+            content = content.replace("/static/styles.css", f"{request.host_url}static/styles.css")
+            content = content.replace("/static/script.js", f"{request.host_url}static/script.js")
+            return content, 200, {'Content-Type': 'application/javascript'}
+    except FileNotFoundError:
+        return "console.log('Loader не найден');", 404
+
+# Универсальные заголовки и закрытие соединения для всех ответов
+@app.after_request
+def add_common_headers(response):
+    response.headers['Connection'] = 'close'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+# Обработка префлайт-запросов для /chat
+@app.route('/chat', methods=['OPTIONS'])
+def chat_options():
+    return ('', 204)
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """API endpoint для чата"""
+    print("📨 Получен запрос к /chat endpoint")
+    print(f"🔍 Метод запроса: {request.method}")
+    print(f"🔍 Content-Type: {request.content_type}")
+    print(f"🔍 Headers: {dict(request.headers)}")
+    
     try:
-        data = request.get_json()
+        # Более надёжный парсинг JSON: сначала пробуем стандартный способ, затем резервный
+        print("🔍 Пытаемся получить JSON данные...")
+        data = request.get_json(silent=True)
+        print(f"🔍 Полученные данные: {data}")
+        if data is None:
+            try:
+                data = json.loads(request.data.decode('utf-8'))
+            except Exception as e:
+                print(f"❌ Ошибка парсинга JSON: {e}")
+                return jsonify({
+                    "error": "Некорректный JSON",
+                    "details": str(e),
+                    "status": "error"
+                }), 400
+        
+        print(f"📋 Данные запроса: {data}")
         
         if not data or 'message' not in data:
+            print("❌ Отсутствует поле message в запросе")
             return jsonify({
                 "error": "Необходимо указать сообщение",
                 "status": "error"
@@ -309,22 +532,30 @@ def chat():
         user_message = data['message'].strip()
         session_id = data.get('session_id')
         
+        print(f"💬 Сообщение пользователя: {user_message}")
+        print(f"🔑 ID сессии: {session_id}")
+        
         if not user_message:
+            print("❌ Пустое сообщение")
             return jsonify({
                 "error": "Сообщение не может быть пустым",
                 "status": "error"
             }), 400
         
         # Получаем или создаем сессию
+        print("🔄 Получаю или создаю сессию...")
         session = get_or_create_session(session_id)
+        print(f"✅ Сессия получена: {session.session_id}")
         
         # Получаем ответ от RAG-системы
+        print("🤖 Получаю ответ от RAG-системы...")
         result = session.get_response(user_message)
+        print(f"📤 Отправляю результат: {result}")
         
         return jsonify(result)
         
     except Exception as e:
-        print(f"Ошибка в API: {e}")
+        print(f"❌ Ошибка в API: {e}")
         return jsonify({
             "error": "Внутренняя ошибка сервера",
             "details": str(e),
@@ -333,13 +564,50 @@ def chat():
 
 @app.route('/health')
 def health_check():
-    """Проверка состояния сервера"""
+    """Проверка здоровья сервиса"""
+    # Проверяем подключение к Ollama
+    ollama_status = False
+    try:
+        ollama_api = OllamaAPI()
+        ollama_status = ollama_api.check_connection()
+    except:
+        ollama_status = False
+    
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
+        "rag_available": RAG_AVAILABLE,
+        "ollama_available": ollama_status,
         "active_sessions": len(sessions),
-        "rag_system": "available"
+        "uptime": time.time() - start_time if 'start_time' in locals() else 0
     })
+
+@app.route('/ollama/status')
+def ollama_status():
+    """Проверка статуса Ollama"""
+    try:
+        ollama_api = OllamaAPI()
+        models = ollama_api.get_available_models()
+        return jsonify({
+            "status": "connected",
+            "available_models": models,
+            "current_model": os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+@app.route('/ollama/models')
+def list_ollama_models():
+    """Список доступных моделей Ollama"""
+    try:
+        ollama_api = OllamaAPI()
+        models = ollama_api.get_available_models()
+        return jsonify({"models": models})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/sessions/<session_id>')
 def get_session_history(session_id):
@@ -361,13 +629,18 @@ def get_session_history(session_id):
 if __name__ == '__main__':
     print("🚀 Запускаем сервер ВОККДЦ чатбота...")
     print(f"📋 Доступные endpoint-ы:")
-    print(f"   - Главная: http://localhost:5000/")
-    print(f"   - Jivo-виджет: http://localhost:5000/jivo (рекомендуется)")
-    print(f"   - Классический виджет: http://localhost:5000/widget")
-    print(f"   - API чата: http://localhost:5000/chat")
-    print(f"   - Проверка состояния: http://localhost:5000/health")
+    print(f"   - Главная: http://0.0.0.0:8085/")
+    print(f"   - Jivo-виджет: http://0.0.0.0:8085/jivo (рекомендуется)")
+    print(f"   - Классический виджет: http://0.0.0.0:8085/widget")
+    print(f"   - API чата: http://0.0.0.0:8085/chat")
+    print(f"   - Проверка состояния: http://0.0.0.0:8085/health")
     print()
-    print("📝 Для интеграции с Битрикс24 используйте URL: http://localhost:5000/chat")
+    print("📝 Для интеграции с Битрикс24 используйте URL: http://localhost:8085/chat")
     print("🌐 Сервер запускается на всех интерфейсах (0.0.0.0) для доступа из вне")
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    host = os.getenv('FLASK_HOST', '0.0.0.0')
+    port = int(os.getenv('FLASK_PORT', 8085))
+    debug = os.getenv('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
+    
+    # Отключаем перезагрузчик и включаем потоковый режим для стабильной обработки POST
+    app.run(host=host, port=port, debug=debug, use_reloader=False, threaded=True)

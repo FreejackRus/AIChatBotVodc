@@ -168,7 +168,7 @@ fi
 # Проверка health endpoint
 log_info "Проверка health endpoint..."
 sleep 5
-if curl -f http://localhost:5000/health > /dev/null 2>&1; then
+if curl -f http://127.0.0.1:8085/health > /dev/null 2>&1; then
     log_info "Health check пройден!"
 else
     log_error "Health check не пройден. Проверьте настройки."
@@ -176,6 +176,6 @@ else
 fi
 
 log_info "Развертывание завершено успешно!"
-log_info "Чатбот доступен по адресу: http://localhost:5000"
+log_info "Чатбот доступен по адресу: http://0.0.0.0:8085"
 log_info "Для просмотра логов используйте: journalctl -u $SERVICE_NAME -f"
 log_info "Для управления сервисом используйте: systemctl $SERVICE_NAME {start|stop|restart|status}"

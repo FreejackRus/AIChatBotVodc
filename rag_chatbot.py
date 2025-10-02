@@ -64,7 +64,7 @@ class RAGChatBot:
                 print(f"{Fore.RED}Ошибка при получении списка моделей: {response.status_code}{Style.RESET_ALL}")
                 return []
         except Exception as e:
-            print(f"{Fore.RED}Ошибка при подключении к LM Studio: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}Ошибка при подключении к Ollama: {e}{Style.RESET_ALL}")
             return []
     
     def get_relevant_context(self, query: str) -> str:
@@ -402,6 +402,6 @@ if __name__ == "__main__":
     init()
     
     # Создаем и запускаем чатбота
-    # Используем мок-эмбеддинги для тестирования без LM Studio
+    # Используем мок-эмбеддинги для тестирования без Ollama
     bot = RAGChatBot(use_mock_embeddings=False)
     bot.run_interactive()

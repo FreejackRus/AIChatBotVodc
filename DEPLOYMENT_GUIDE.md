@@ -12,7 +12,7 @@
        │                        ▼                        ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  1С-Битрикс     │    │  Знания ВОККДЦ  │    │  Модель LLM     │
-│  (PHP-компонент)│    │ (vodc_complete) │    │ (LM Studio)     │
+│  (PHP-компонент)│    │ (vodc_complete) │    │ (Ollama)        │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
@@ -37,7 +37,7 @@ pip install flask flask-cors gunicorn
 
 ### 2. Запуск RAG-системы
 ```bash
-# Запустите LM Studio с API на порту 1234
+# Запустите Ollama с API на порту 11434
 # Убедитесь, что модель загружена и работает
 
 # Проверьте работу RAG-системы
@@ -58,20 +58,20 @@ gunicorn widget_server:app -c gunicorn.conf.py
 
 ## Детальная настройка
 
-### Настройка LM Studio
-1. Установите LM Studio
+### Настройка Ollama
+1. Установите Ollama
 2. Загрузите модель (например, Llama 3.2 3B)
-3. Включите API-сервер на порту 1234
-4. Проверьте доступность: `curl http://localhost:1234/v1/models`
+3. Запустите Ollama сервер
+4. Проверьте доступность: `curl http://localhost:11434/api/tags`
 
 ### Конфигурация Flask-сервера
 
 Создайте файл `.env` в корне проекта:
 ```
 FLASK_HOST=0.0.0.0
-FLASK_PORT=5000
+FLASK_PORT=8085
 FLASK_DEBUG=False
-LM_STUDIO_URL=http://localhost:1234
+OLLAMA_URL=http://localhost:11434
 CORS_ORIGINS=*
 ```
 
@@ -101,7 +101,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 8085
 
 CMD ["gunicorn", "widget_server:app", "-c", "gunicorn.conf.py"]
 ```
@@ -113,11 +113,11 @@ services:
   vodc-chatbot:
     build: .
     ports:
-      - "5000:5000"
+      - "8085:8085"
     environment:
       - FLASK_HOST=0.0.0.0
-      - FLASK_PORT=5000
-      - LM_STUDIO_URL=http://host.docker.internal:1234
+      - FLASK_PORT=8085
+      - OLLAMA_URL=http://host.docker.internal:11434
     volumes:
       - ./knowledge_base:/app/knowledge_base
     restart: unless-stopped
@@ -163,7 +163,7 @@ server {
     server_name chatbot.your-domain.com;
     
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:8085;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -216,7 +216,7 @@ sudo systemctl restart vodc-chatbot
 ### Health-check
 Проверьте работоспособность:
 ```bash
-curl http://localhost:5000/health
+curl http://localhost:8085/health
 ```
 
 ## Обновление системы
@@ -258,7 +258,7 @@ find /backup -name "vodc-chatbot-*.tar.gz" -mtime +30 -delete
 ### Чатбот не отвечает
 1. Проверьте статус сервиса: `sudo systemctl status vodc-chatbot`
 2. Проверьте логи: `sudo journalctl -u vodc-chatbot -n 50`
-3. Проверьте доступность LM Studio: `curl http://localhost:1234/v1/models`
+3. Проверьте доступность Ollama: `curl http://localhost:11434/api/tags`
 4. Проверьте настройки CORS
 
 ### Ошибки CORS
@@ -269,7 +269,7 @@ CORS(app, origins=["https://your-domain.com"])
 
 ### Проблемы с RAG-системой
 1. Проверьте наличие файла знаний
-2. Проверьте доступность LM Studio API
+2. Проверьте доступность Ollama API
 3. Проверьте логи RAG-системы
 
 ### Проблемы с 1С-Битрикс

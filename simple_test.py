@@ -7,7 +7,7 @@ from rag_system import RAGSystem
 
 def main():
     # Создаем RAG систему с реальными эмбеддингами
-    print("Создаю RAG систему с LM Studio...")
+    print("Создаю RAG систему с Ollama...")
     rag = RAGSystem(use_mock_embeddings=False)
     
     # Загружаем документ

@@ -20,12 +20,12 @@ class RAGSystem:
         if use_mock_embeddings:
             self.embedding_api = MockEmbeddingAPI()
         else:
-            # Используем реальный API для эмбеддингов из LM Studio
+            # Используем реальный API для эмбеддингов из Ollama
             try:
                 self.embedding_api = EmbeddingAPI()
-                print("✓ Подключение к LM Studio для эмбеддингов")
+                print("✓ Подключение к Ollama для эмбеддингов")
             except Exception as e:
-                print(f"⚠️ Не удалось подключиться к LM Studio: {e}")
+                print(f"⚠️ Не удалось подключиться к Ollama: {e}")
                 print("✓ Используются моковые эмбеддинги")
                 self.embedding_api = MockEmbeddingAPI()
         

@@ -11,7 +11,8 @@ class AdvancedLocalChatBot:
         self.base_url = base_url.rstrip("/")
         self.api_url = f"{self.base_url}/api/chat"
         self.models_endpoint = f"{self.base_url}/api/tags"
-        self.model = None
+        # Выбор модели: из переменной окружения или дефолт Qwen3-30B
+        self.model = os.getenv('OLLAMA_MODEL') or "hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS"
         self.conversation_history = []
         self.current_prompt_key = "general_assistant"
         self.current_prompt = get_prompt(self.current_prompt_key)

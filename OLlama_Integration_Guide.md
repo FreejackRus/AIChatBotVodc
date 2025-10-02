@@ -33,7 +33,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ollama serve
 
 # Установка моделей
-ollama pull llama3.2:3b
+ollama pull hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
 ollama pull nomic-embed-text
 ```
 
@@ -44,7 +44,7 @@ ollama pull nomic-embed-text
 ```bash
 # Ollama подключение
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+OLLAMA_MODEL=hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 
 # Параметры генерации
@@ -165,7 +165,7 @@ journalctl -u ollama -f
 ollama list
 
 # Установка нужной модели
-ollama pull llama3.2:3b
+ollama pull hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
 ```
 
 ### Проблемы с подключением

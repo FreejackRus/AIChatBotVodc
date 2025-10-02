@@ -24,7 +24,7 @@
 2. **Установите модели Ollama:**
    ```bash
    # Установите популярные модели
-   ollama pull llama3.2:3b
+   ollama pull hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
    ollama pull mistral:7b
    ollama pull codellama:7b
    ```
@@ -32,7 +32,7 @@
 3. **Проверьте установку:**
    ```bash
    ollama list  # Список установленных моделей
-   ollama run llama3.2:3b  # Тестовый запуск
+   ollama run hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS  # Тестовый запуск
    ```
 
 ### Установка моделей
@@ -40,7 +40,7 @@
 1. Используйте команды Ollama для установки моделей:
    ```bash
    # Универсальные модели
-   ollama pull llama3.2:3b      # Быстрая и легкая
+   ollama pull hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS      # Рекомендуемая модель
    ollama pull mistral:7b       # Универсальная модель
    
    # Модели для программирования
@@ -55,7 +55,7 @@
 3. Настройте переменные окружения в `.env.ollama`:
    ```
    OLLAMA_HOST=http://localhost:11434
-   OLLAMA_MODEL=llama3.2:3b
+   OLLAMA_MODEL=hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
    ```
 
 ### 4. Установка Python-скриптов
@@ -269,7 +269,7 @@ AIChatBotVodc/
    WORKERS=4
    OLLAMA_MAX_TOKENS=2048
    ```
-3. **Выберите подходящую модель**: Начните с `llama3.2:3b` для тестирования
+3. **Выберите подходящую модель**: Рекомендуется `hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS`
 4. **Мониторинг ресурсов**: Используйте `ollama ps` для просмотра загруженных моделей
 
 ### Оптимизация RAG:
@@ -406,7 +406,7 @@ MIT License - см. LICENSE файл для деталей.
 ```bash
 # Параметры подключения к Ollama
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+OLLAMA_MODEL=hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 OLLAMA_TEMPERATURE=0.7
 OLLAMA_MAX_TOKENS=2048

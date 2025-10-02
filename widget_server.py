@@ -97,7 +97,7 @@ class ChatSession:
         try:
             # Пытаемся использовать Ollama
             ollama_url = os.getenv('OLLAMA_URL') or os.getenv('OLLAMA_HOST') or 'http://localhost:11434'
-            ollama_model = os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
+            ollama_model = os.getenv('OLLAMA_MODEL', 'hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS')
             
             # Создаем OllamaAPI с включенным логированием для отладки
             self.ollama_api = OllamaAPI(base_url=ollama_url, model=ollama_model, verbose=True)  # Включаем логирование для отладки
@@ -591,7 +591,7 @@ def ollama_status():
         return jsonify({
             "status": "connected",
             "available_models": models,
-            "current_model": os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
+            "current_model": os.getenv('OLLAMA_MODEL', 'hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS')
         })
     except Exception as e:
         return jsonify({

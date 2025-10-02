@@ -1,6 +1,7 @@
 import requests
 import json
 import time
+import os
 from typing import Optional, Dict, Any
 
 class LocalChatBot:
@@ -8,7 +9,8 @@ class LocalChatBot:
         self.base_url = base_url.rstrip('/')
         self.api_url = f"{self.base_url}/api/chat"
         self.tags_url = f"{self.base_url}/api/tags"
-        self.model = None
+        # Выбор модели: из переменной окружения или дефолт Qwen3-30B
+        self.model = os.getenv('OLLAMA_MODEL') or "hf.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF:IQ4_XS"
         self.conversation_history = []
         
     def check_connection(self) -> bool:

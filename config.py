@@ -68,6 +68,19 @@ def _optional_http_url(name: str, value: str) -> str | None:
     return _validate_http_url(name, value) if value else None
 
 
+def _validate_vodc_url(name: str, value: str) -> str:
+    normalized = _validate_http_url(name, value)
+    parsed = urlparse(normalized)
+    if parsed.scheme != "https" or (parsed.hostname or "").lower() not in {
+        "vodc.ru",
+        "www.vodc.ru",
+    }:
+        raise ConfigurationError(
+            f"{name} должен быть HTTPS URL домена vodc.ru"
+        )
+    return normalized
+
+
 def _csv(name: str, default: str, *, strip_slash: bool = True) -> tuple[str, ...]:
     values = tuple(
         (value.strip().rstrip("/") if strip_slash else value.strip())
@@ -107,6 +120,11 @@ class Settings:
     rag_excerpt_chars: int
     source_max_age_days: int
     source_max_bytes: int
+    catalog_audit_enabled: bool
+    catalog_audit_url: str
+    catalog_audit_min_services: int
+    catalog_audit_max_bytes: int
+    catalog_audit_max_removed_ratio: float
     request_timeout: float
     health_timeout: float
     session_ttl_seconds: int
@@ -237,6 +255,23 @@ class Settings:
             rag_excerpt_chars=_parse_int("RAG_EXCERPT_CHARS", 800),
             source_max_age_days=_parse_int("SOURCE_MAX_AGE_DAYS", 180),
             source_max_bytes=_parse_int("SOURCE_MAX_BYTES", 2_000_000),
+            catalog_audit_enabled=_parse_bool("CATALOG_AUDIT_ENABLED", False),
+            catalog_audit_url=_validate_vodc_url(
+                "CATALOG_AUDIT_URL",
+                os.getenv(
+                    "CATALOG_AUDIT_URL",
+                    "https://www.vodc.ru/pacientam/platnye/platnye.php",
+                ),
+            ),
+            catalog_audit_min_services=_parse_int(
+                "CATALOG_AUDIT_MIN_SERVICES", 1000
+            ),
+            catalog_audit_max_bytes=_parse_int(
+                "CATALOG_AUDIT_MAX_BYTES", 2_000_000
+            ),
+            catalog_audit_max_removed_ratio=_parse_ratio(
+                "CATALOG_AUDIT_MAX_REMOVED_RATIO", 0.2
+            ),
             request_timeout=_parse_float("REQUEST_TIMEOUT", 30.0),
             health_timeout=_parse_float("HEALTH_TIMEOUT", 2.0),
             session_ttl_seconds=_parse_int("SESSION_TTL_SECONDS", 7200),

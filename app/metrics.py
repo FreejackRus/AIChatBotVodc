@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 HTTP_REQUESTS = Counter(
     "vodc_http_requests_total",
@@ -81,4 +81,17 @@ KNOWLEDGE_INGESTION_RUNS = Counter(
 KNOWLEDGE_INGESTION_CHUNKS = Counter(
     "vodc_knowledge_ingestion_chunks_total",
     "Chunks replaced by successful ingestion runs.",
+)
+CATALOG_AUDIT_RUNS = Counter(
+    "vodc_catalog_audit_runs_total",
+    "Public service catalogue audit runs by result.",
+    ("result",),
+)
+CATALOG_AUDIT_SERVICES = Gauge(
+    "vodc_catalog_audit_services",
+    "Unique service codes in the latest completed catalogue audit.",
+)
+CATALOG_AUDIT_ISSUES = Gauge(
+    "vodc_catalog_audit_issues",
+    "Issues in the latest completed catalogue audit.",
 )

@@ -50,6 +50,22 @@ Production retrieval gate:
   --output artifacts/retrieval-report.json
 ```
 
+## Аудит публичного каталога
+
+Worker сохраняет публичный прейскурант только как контрольное наблюдение.
+Эти строки не используются в RAG или карточках. После каждого цикла:
+
+```bash
+docker compose exec -T postgres psql -U vodc -d vodc -c \
+  "SELECT completed_at, status, service_count, row_count, issue_count, stats FROM catalog_audit_runs ORDER BY completed_at DESC LIMIT 5"
+```
+
+Статус `quarantined` означает изменение структуры, резкое исчезновение
+услуг или другое нарушение fail-closed проверок. Не копировать цены из
+снимка в МИС или базу знаний. Проверить `catalog_audit_issues`, страницу
+прейскуранта и контракт МИС. При штатном изменении порогов сначала обновить
+тесты и выполнить один ручной audit-only цикл.
+
 ## Деградация
 
 - Одна vLLM-реплика недоступна: gateway продолжает round-robin; ошибочный

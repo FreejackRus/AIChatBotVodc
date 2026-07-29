@@ -28,3 +28,10 @@ def test_embedding_revision_is_required(monkeypatch):
     monkeypatch.setenv("EMBEDDING_MODEL_REVISION", "")
     with pytest.raises(ConfigurationError, match="REVISION"):
         Settings.from_env()
+
+
+def test_catalog_audit_url_is_restricted_to_vodc(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://vodc.ru")
+    monkeypatch.setenv("CATALOG_AUDIT_URL", "https://evil.example/prices")
+    with pytest.raises(ConfigurationError, match="vodc.ru"):
+        Settings.from_env()

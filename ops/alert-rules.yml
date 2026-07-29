@@ -49,6 +49,22 @@ groups:
         annotations:
           summary: Последний цикл индексации базы знаний завершился ошибкой
 
+      - alert: VodcCatalogAuditFailed
+        expr: increase(vodc_catalog_audit_runs_total{result="error"}[30m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Аудит публичного каталога услуг завершился ошибкой
+
+      - alert: VodcCatalogAuditQuarantined
+        expr: increase(vodc_catalog_audit_runs_total{result="quarantined"}[30m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Новый снимок каталога услуг помещён в карантин
+
       - alert: VodcModelTtftHigh
         expr: histogram_quantile(0.95, sum by (le) (rate(vodc_model_time_to_first_token_seconds_bucket[5m]))) > 10
         for: 10m

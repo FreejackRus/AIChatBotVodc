@@ -1,39 +1,27 @@
-# Используем официальный образ Python
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем файлы зависимостей
-COPY requirements.txt .
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем Python зависимости
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем исходный код
 COPY . .
+RUN useradd --create-home --uid 1000 chatbot \
+    && mkdir -p /app/logs \
+    && chown -R chatbot:chatbot /app
 
-# Создаем директории для логов
-RUN mkdir -p logs
-
-# Создаем непривилегированного пользователя
-RUN useradd -m -u 1000 chatbot && chown -R chatbot:chatbot /app
 USER chatbot
-
-# Открываем порт
 EXPOSE 5000
 
-# Определяем переменные окружения по умолчанию
-ENV FLASK_HOST=0.0.0.0
-ENV FLASK_PORT=5000
-ENV PYTHONPATH=/app
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl --fail http://127.0.0.1:5000/health/live || exit 1
 
-# Запускаем приложение
-CMD ["gunicorn", "widget_server:app", "-c", "gunicorn.conf.py"]
+CMD ["gunicorn", "app.main:app", "-c", "gunicorn.conf.py"]

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "filename": "vodc_complete_info.md",
+      "title": "Официальная информация ВОККДЦ",
+      "url": "https://vodc.ru/",
+      "owner": "ВОККДЦ",
+      "reviewed_at": "2026-07-23",
+      "local_path": "knowledge_base/vodc_complete_info.md",
+      "enabled": true
+    },
+    {
+      "filename": "vodc_abbreviations_faq.md",
+      "title": "Справочник ВОККДЦ",
+      "url": "https://vodc.ru/about/",
+      "owner": "ВОККДЦ",
+      "reviewed_at": "2026-07-23",
+      "local_path": "knowledge_base/vodc_abbreviations_faq.md",
+      "enabled": true
+    }
+  ]
+}

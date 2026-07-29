@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
+scrape_configs:
+  - job_name: vodc-api
+    static_configs:
+      - targets: ["api:5000"]
+
+  - job_name: vllm-primary
+    static_configs:
+      - targets: ["vllm-primary:8000"]
+
+  - job_name: vllm-secondary
+    static_configs:
+      - targets: ["vllm-secondary:8000"]
+
+  - job_name: vllm-embedding
+    static_configs:
+      - targets: ["vllm-embedding:8000"]
+
+  - job_name: nvidia-gpu
+    static_configs:
+      - targets: ["dcgm-exporter:9400"]

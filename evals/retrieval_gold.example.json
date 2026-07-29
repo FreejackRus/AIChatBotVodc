@@ -1,0 +1,12 @@
+[
+  {
+    "query": "Где находится диагностический центр?",
+    "expected_urls": ["https://vodc.ru/"],
+    "critical": false
+  },
+  {
+    "query": "Что означает ВОККДЦ?",
+    "expected_urls": ["https://vodc.ru/about/"],
+    "critical": false
+  }
+]

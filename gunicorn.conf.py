@@ -1,47 +1,24 @@
-# Конфигурация Gunicorn для чатбота ВОККДЦ
+"""Gunicorn settings for FastAPI and long-lived SSE responses."""
 
-# Настройки сети
-bind = "0.0.0.0:5000"
-backlog = 2048
+import os
 
-# Настройки воркеров
-workers = 4  # Количество воркеров (CPU cores * 2 + 1)
-worker_class = "sync"
-worker_connections = 1000
-timeout = 30
-keepalive = 2
-max_requests = 1000
-max_requests_jitter = 50
 
-# Настройки безопасности
+bind = os.getenv("GUNICORN_BIND", "0.0.0.0:5000")
+workers = int(os.getenv("MAX_WORKERS", "2"))
+worker_class = "uvicorn.workers.UvicornWorker"
+timeout = int(os.getenv("GUNICORN_TIMEOUT", "90"))
+graceful_timeout = 30
+keepalive = 5
+max_requests = 5000
+max_requests_jitter = 250
+
+accesslog = "-"
+errorlog = "-"
+loglevel = os.getenv("LOG_LEVEL", "info").lower()
+capture_output = True
+preload_app = False
+proc_name = "vodc-ai-navigator"
+
 limit_request_line = 4096
 limit_request_fields = 100
 limit_request_field_size = 8190
-
-# Настройки логирования
-accesslog = "-"  # stdout
-errorlog = "-"   # stderr
-loglevel = "info"
-access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
-
-# Настройки процесса
-daemon = False
-pidfile = "gunicorn.pid"
-user = None
-group = None
-tmp_upload_dir = None
-
-# Настройки SSL (раскомментируйте при необходимости)
-# keyfile = "/path/to/key.pem"
-# certfile = "/path/to/cert.pem"
-
-# Настройки для продакшена
-preload_app = True
-reload = False
-spew = False
-
-# Настройки имени процесса
-proc_name = "vodc-chatbot"
-
-# Настройки таймаутов graceful restart
-graceful_timeout = 30

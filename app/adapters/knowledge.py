@@ -11,6 +11,7 @@ import asyncpg
 import httpx
 
 from ..domain.models import SourceRef
+from ..domain.safety import contains_prompt_injection
 from ..ingestion import ManifestSource, chunk_text, load_manifest
 from ..metrics import RAG_SEARCHES, RAG_SEARCH_SECONDS
 from ..ports import KnowledgeUnavailable
@@ -75,10 +76,15 @@ class LocalKnowledgeAdapter:
                 raise ValueError(f"Локальный snapshot отсутствует: {source.local_path}")
             if path.stat().st_size > source_max_bytes:
                 raise ValueError(f"Источник {source.filename} превышает лимит размера")
-            for position, content in enumerate(
-                chunk_text(path.read_text(encoding="utf-8"), chunk_size, overlap)
+            source_content = path.read_text(encoding="utf-8")
+            if contains_prompt_injection(source_content):
+                raise ValueError(
+                    f"Источник {source.filename} содержит инструкции для модели"
+                )
+            for position, chunk in enumerate(
+                chunk_text(source_content, chunk_size, overlap)
             ):
-                chunks.append(LocalChunk(source, position, content))
+                chunks.append(LocalChunk(source, position, chunk))
         self.chunks = tuple(chunks)
 
     async def search(self, query: str, limit: int) -> list[SourceRef]:

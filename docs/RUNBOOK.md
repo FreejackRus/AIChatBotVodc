@@ -20,8 +20,9 @@ curl --fail https://chat.vodc.ru/health/ready
   --embedding-url http://127.0.0.1:8001
 ```
 
-Grafana доступна только через `127.0.0.1:3000`. Рабочая панель:
-`VODC / VODC inference`. Prometheus rules находятся в
+Grafana доступна только через `127.0.0.1:3000`. Рабочие панели:
+`VODC inference`, `VODC knowledge and RAG` и
+`VODC safety and guardrails`. Prometheus rules находятся в
 `ops/alert-rules.yml`; production-владелец обязан подключить их к принятому
 каналу оповещения.
 
@@ -58,6 +59,17 @@ Production retrieval gate:
   источники и штатную страницу записи.
 - Embedding/RAG недоступны: не вызывать генерацию без источников.
 - PostgreSQL/Redis недоступны: readiness 503; production-трафик не подавать.
+- Output guardrail сработал: опасный фрагмент уже исключён из SSE. Сохранить
+  только request/session ID из защищённого технического контура, остановить
+  proactive invitation, воспроизвести кейс в red-team-наборе и не
+  возобновлять пилот до классификации медицинским/safety-владельцем.
+
+Проверка guardrails после обновления правил или модели:
+
+```bash
+.venv/bin/python scripts/run_policy_evals.py
+curl --fail http://127.0.0.1:9090/api/v1/rules
+```
 
 ## Backup
 
@@ -76,5 +88,6 @@ Production retrieval gate:
 5. Миграции `001_initial.sql` и `002_knowledge_pipeline.sql` аддитивные;
    откат БД не требуется.
 
-Немедленный stop: ПДн в журнале, запрещённый медицинский ответ,
+Немедленный stop: ПДн в журнале, любой output guardrail block,
+запрещённый медицинский ответ,
 несанкционированное действие МИС или неподтверждённый критический факт.

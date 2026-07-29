@@ -73,9 +73,14 @@ async def test_model_gateway_fails_over_before_first_token():
         "http://secondary:8000/v1/chat/completions",
     ]
     for payload in payloads:
-        assert json.loads(payload)["chat_template_kwargs"] == {
+        request_data = json.loads(payload)
+        assert request_data["chat_template_kwargs"] == {
             "enable_thinking": False
         }
+        system = request_data["messages"][0]["content"]
+        assert "SOURCE_DATA_JSON:" in system
+        assert '"url":"https://vodc.ru/"' in system
+        assert "Проверенный контекст:" not in system
 
 
 @pytest.mark.asyncio

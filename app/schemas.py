@@ -42,8 +42,12 @@ class MessageInput(BaseModel):
     def validate_payload(self) -> MessageInput:
         if self.type is InputType.TEXT and not (self.text or "").strip():
             raise ValueError("Для text требуется непустое поле text")
+        if self.type is InputType.TEXT and self.token is not None:
+            raise ValueError("Для text поле token запрещено")
         if self.type is not InputType.TEXT and not self.token:
             raise ValueError("Для действия требуется подписанный token")
+        if self.type is not InputType.TEXT and self.text is not None:
+            raise ValueError("Для действия поле text запрещено")
         return self
 
 

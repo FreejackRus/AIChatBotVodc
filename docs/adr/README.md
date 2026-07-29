@@ -6,6 +6,7 @@
 | [0002](0002-deterministic-orchestration.md) | Детерминированная воронка и safety до LLM | принято |
 | [0003](0003-local-model-selection.md) | Qwen3.5-9B как основная модель | условно до GPU benchmark |
 | [0004](0004-data-boundaries.md) | Границы raw/redacted/dynamic данных | принято |
+| [0005](0005-guardrails-before-io.md) | Guardrails до внешнего I/O и SSE | принято |
 
 Новый ADR добавляется отдельным неизменяемым номером. Изменение принятого
 решения оформляется новым ADR со ссылкой на заменяемый документ.

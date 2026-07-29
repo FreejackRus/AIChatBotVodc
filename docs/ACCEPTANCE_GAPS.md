@@ -6,9 +6,10 @@
 1. Swagger/OpenAPI, URL и учётные данные тестовой МИС «МедАнгел».
 2. Утверждённый mapping DTO и обезличенные contract fixtures.
 3. Gold set из 100–200 запросов с эталонными URL.
-4. Утверждённые медицинским ответственным тексты emergency/refusal.
-5. Подписанный privacy-регламент и проверка redaction-набора.
-6. Benchmark основной Qwen3.5-9B против
+4. Утверждённые медицинским ответственным emergency/refusal тексты,
+   триггеры и red-team-набор.
+5. Подписанный privacy-регламент, PII-текст и проверка detection/redaction.
+6. Benchmark и output-guard red-team основной Qwen3.5-9B против
    Qwen3.5-35B-A3B-GPTQ-Int4 на 2×RTX 5090.
 7. Нагрузочный протокол 20×10 с p95 TTFT не более 10 секунд.
 8. Production TLS, внешнее backup-хранилище и реальные секреты.

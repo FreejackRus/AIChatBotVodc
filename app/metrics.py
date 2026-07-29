@@ -33,6 +33,11 @@ CHAT_ERRORS = Counter(
     "Safe public chat errors.",
     ("code",),
 )
+GUARDRAIL_DECISIONS = Counter(
+    "vodc_guardrail_decisions_total",
+    "Deterministic guardrail decisions before tools and before SSE output.",
+    ("direction", "decision"),
+)
 DEPENDENCY_READY = Counter(
     "vodc_dependency_readiness_checks_total",
     "Readiness checks by dependency and result.",

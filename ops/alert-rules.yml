@@ -57,6 +57,22 @@ groups:
         annotations:
           summary: p95 TTFT model gateway превышает 10 секунд
 
+      - alert: VodcUnsafeModelOutput
+        expr: sum(increase(vodc_guardrail_decisions_total{direction="output",decision!="allow"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Output guardrail отклонил ответ локальной модели
+
+      - alert: VodcPiiInputSpike
+        expr: sum(increase(vodc_guardrail_decisions_total{direction="input",decision="pii"}[15m])) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Чат часто отклоняет ввод с персональными данными
+
   - name: vodc-gpu
     rules:
       - alert: VodcGpuTelemetryUnavailable

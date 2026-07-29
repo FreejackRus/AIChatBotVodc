@@ -94,3 +94,16 @@ def test_stage_3_observability_artifacts_are_wired():
     assert "VodcAllChatReplicasUnavailable" in alerts
     assert dashboard["uid"] == "vodc-inference"
     assert len(dashboard["panels"]) >= 8
+
+
+def test_stage_5_guardrail_observability_artifacts_are_wired():
+    alerts = (ROOT / "ops/alert-rules.yml").read_text(encoding="utf-8")
+    dashboard = json.loads(
+        (ROOT / "ops/dashboards/vodc-safety.json").read_text(encoding="utf-8")
+    )
+
+    assert "VodcUnsafeModelOutput" in alerts
+    assert "VodcPiiInputSpike" in alerts
+    assert "vodc_guardrail_decisions_total" in alerts
+    assert dashboard["uid"] == "vodc-safety"
+    assert len(dashboard["panels"]) >= 4

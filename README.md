@@ -9,7 +9,8 @@
 
 - FastAPI и версионированный `/api/v1`, потоковые ответы SSE;
 - детерминированная воронка и подписанные действия карточек;
-- safety gateway до LLM и инструментов;
+- input guardrail до хранения, LLM и инструментов;
+- output guardrail до каждого завершённого SSE-фрагмента;
 - Redis-сессии с TTL 2 часа;
 - локальная очистка ПДн и хранение обезличенных данных 90 дней;
 - PostgreSQL/pgvector и worker управляемой индексации;
@@ -29,6 +30,9 @@
 [docs/STAGE_3_INFERENCE.md](docs/STAGE_3_INFERENCE.md).
 Управляемая база знаний, атомарный ingestion и hybrid retrieval этапа 4
 описаны в [docs/STAGE_4_KNOWLEDGE_RAG.md](docs/STAGE_4_KNOWLEDGE_RAG.md).
+Детерминированные разрешения, input/output guardrails и red-team gate этапа 5
+описаны в
+[docs/STAGE_5_AGENT_GUARDRAILS.md](docs/STAGE_5_AGENT_GUARDRAILS.md).
 
 ## Локальный запуск
 

@@ -41,11 +41,12 @@ class FakeModel:
 
     def __init__(self):
         self.calls = 0
+        self.chunks = ["Подтверждённый ", "ответ."]
 
     async def stream(self, *, prompt, history, sources):
         self.calls += 1
-        yield "Подтверждённый "
-        yield "ответ."
+        for chunk in self.chunks:
+            yield chunk
 
     async def ping(self):
         return self.ready
@@ -59,6 +60,7 @@ class FakeMedAngel:
 
     def __init__(self):
         self.fail = False
+        self.search_calls = 0
 
     def _check(self):
         if self.fail:
@@ -68,6 +70,7 @@ class FakeMedAngel:
 
     async def search_services(self, query):
         self._check()
+        self.search_calls += 1
         return [
             Service(
                 id="service-1",

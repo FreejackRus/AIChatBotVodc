@@ -16,6 +16,8 @@ import asyncpg
 import httpx
 from bs4 import BeautifulSoup
 
+from .domain.safety import contains_prompt_injection
+
 TRUSTED_SOURCE_HOSTS = {"vodc.ru", "www.vodc.ru"}
 EMPTY_CONTENT_HASH = hashlib.sha256(b"").hexdigest()
 
@@ -334,6 +336,10 @@ class KnowledgeIngestion:
                 content = await self._content(source)
                 if not content:
                     raise ValueError(f"Источник {source.filename} не содержит текста")
+                if contains_prompt_injection(content):
+                    raise ValueError(
+                        f"Источник {source.filename} содержит инструкции для модели"
+                    )
                 content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
                 chunks = chunk_text(content, chunk_size, overlap)
                 if not chunks:

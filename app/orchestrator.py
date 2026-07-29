@@ -20,7 +20,15 @@ from .domain.models import (
     Slot,
 )
 from .domain.priorities import ServicePrioritizer
-from .domain.safety import SafetyGateway, SafetyKind
+from .domain.safety import (
+    UNSAFE_OUTPUT_RESPONSE,
+    OutputSafetyDecision,
+    OutputSafetyKind,
+    ResponseGuard,
+    SafetyGateway,
+    SafetyKind,
+)
+from .metrics import CHAT_ERRORS, GUARDRAIL_DECISIONS
 from .ports import (
     EventStore,
     KnowledgePort,
@@ -35,6 +43,7 @@ from .privacy import PIIRedactor
 from .security import ActionTokenSigner, InvalidActionToken
 
 logger = logging.getLogger(__name__)
+_SEGMENT_BOUNDARY = re.compile(r'[.!?…](?:["»)\]]*)?(?:\s+|$)|\n+')
 
 
 class MessageRejected(ValueError):
@@ -66,8 +75,18 @@ class DialogOrchestrator:
         self.signer = signer
         self.redactor = redactor
         self.safety = SafetyGateway()
+        self.response_guard = ResponseGuard()
         self.rag_top_k = rag_top_k
         self.prioritizer = prioritizer or ServicePrioritizer()
+
+    @staticmethod
+    def _complete_segments(buffer: str) -> tuple[list[str], str]:
+        segments: list[str] = []
+        while match := _SEGMENT_BOUNDARY.search(buffer):
+            end = match.end()
+            segments.append(buffer[:end])
+            buffer = buffer[end:]
+        return segments, buffer
 
     async def _persist_message(
         self, session: ChatSession, role: str, text: str
@@ -278,11 +297,9 @@ class DialogOrchestrator:
             return
 
         user_text = (text or "").strip()
-        decision = self.safety.evaluate(user_text)
-        intent = classify_intent(user_text)
-        intent_policy = policy_for(intent)
-        session.add_message("user", user_text)
-        await self._persist_message(session, "user", user_text)
+        redacted_input = self.redactor.redact(user_text)
+        decision = self.safety.evaluate(user_text, redacted_input.categories)
+        GUARDRAIL_DECISIONS.labels("input", decision.kind.value).inc()
 
         if decision.blocked:
             if decision.kind is SafetyKind.EMERGENCY:
@@ -293,8 +310,13 @@ class DialogOrchestrator:
             await self.sessions.save(session)
             await self.events.record_event(
                 session.id,
-                decision.kind.value,
-                {"state": session.state.value},
+                "guardrail_blocked",
+                {
+                    "direction": "input",
+                    "kind": decision.kind.value,
+                    "state": session.state.value,
+                    "pii_categories": list(redacted_input.categories),
+                },
             )
             yield {"event": "text_delta", "data": {"text": response_text}}
             yield {
@@ -311,6 +333,16 @@ class DialogOrchestrator:
                 },
             }
             return
+
+        intent = classify_intent(user_text)
+        intent_policy = policy_for(intent)
+        session.add_message("user", user_text)
+        await self.events.record_message(
+            session.id,
+            "user",
+            redacted_input.text,
+            redacted_input.categories,
+        )
 
         yield {"event": "status", "data": {"phase": "retrieval"}}
         sources = []
@@ -392,15 +424,78 @@ class DialogOrchestrator:
             yield {"event": "text_delta", "data": {"text": fallback}}
         else:
             yield {"event": "status", "data": {"phase": "generation"}}
+        output_decision = OutputSafetyDecision(OutputSafetyKind.ALLOW)
         try:
             if sources and not intent_policy.uses_mis:
-                async for delta in self.model.stream(
+                model_stream = self.model.stream(
                     prompt=user_text,
                     history=session.history()[:-1],
                     sources=sources,
-                ):
-                    response_parts.append(delta)
-                    yield {"event": "text_delta", "data": {"text": delta}}
+                )
+                buffer = ""
+                guard_context = ""
+                try:
+                    async for delta in model_stream:
+                        buffer += delta
+                        segments, buffer = self._complete_segments(buffer)
+                        for segment in segments:
+                            output_decision = self.response_guard.evaluate(
+                                guard_context + segment, sources
+                            )
+                            if output_decision.blocked:
+                                break
+                            response_parts.append(segment)
+                            guard_context += segment
+                            yield {
+                                "event": "text_delta",
+                                "data": {"text": segment},
+                            }
+                        if output_decision.blocked:
+                            break
+                    if not output_decision.blocked and buffer:
+                        output_decision = self.response_guard.evaluate(
+                            guard_context + buffer, sources
+                        )
+                        if not output_decision.blocked:
+                            response_parts.append(buffer)
+                            yield {
+                                "event": "text_delta",
+                                "data": {"text": buffer},
+                            }
+                finally:
+                    close = getattr(model_stream, "aclose", None)
+                    if close is not None:
+                        await close()
+
+                GUARDRAIL_DECISIONS.labels(
+                    "output", output_decision.kind.value
+                ).inc()
+                if output_decision.blocked:
+                    CHAT_ERRORS.labels("unsafe_model_output").inc()
+                    response_parts.append(UNSAFE_OUTPUT_RESPONSE)
+                    yield {
+                        "event": "text_delta",
+                        "data": {"text": UNSAFE_OUTPUT_RESPONSE},
+                    }
+                    yield {
+                        "event": "error",
+                        "data": {
+                            "code": "unsafe_model_output",
+                            "message": (
+                                "Ответ модели отклонён политикой безопасности"
+                            ),
+                            "retryable": False,
+                        },
+                    }
+                    await self.events.record_event(
+                        session.id,
+                        "guardrail_blocked",
+                        {
+                            "direction": "output",
+                            "kind": output_decision.kind.value,
+                            "state": session.state.value,
+                        },
+                    )
         except ModelUnavailable:
             logger.warning("Model inference unavailable", exc_info=True)
             fallback = (

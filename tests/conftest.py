@@ -138,16 +138,12 @@ class FakeMedAngel:
 def api(monkeypatch, tmp_path):
     knowledge_dir = tmp_path / "knowledge_base"
     knowledge_dir.mkdir()
-    (knowledge_dir / "vector_store.json").write_text(
-        '{"documents": [{"content": "test"}]}', encoding="utf-8"
-    )
     manifest = knowledge_dir / "sources.json"
-    manifest.write_text('{"sources": []}', encoding="utf-8")
+    manifest.write_text('{"version": 2, "sources": []}', encoding="utf-8")
 
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("CORS_ORIGINS", "http://localhost:5000")
     monkeypatch.setenv("TRUSTED_PAGE_HOSTS", "localhost,127.0.0.1")
-    monkeypatch.setenv("RAG_KNOWLEDGE_BASE_PATH", str(knowledge_dir))
     monkeypatch.setenv("SOURCE_MANIFEST_PATH", str(manifest))
     monkeypatch.setenv("REDIS_URL", "")
     monkeypatch.setenv("DATABASE_URL", "")

@@ -49,6 +49,13 @@ def _parse_float(name: str, default: float, minimum: float = 0.1) -> float:
     return value
 
 
+def _parse_ratio(name: str, default: float) -> float:
+    value = _parse_float(name, default, minimum=0.0)
+    if value > 1:
+        raise ConfigurationError(f"{name} должен быть в диапазоне от 0 до 1")
+    return value
+
+
 def _validate_http_url(name: str, value: str) -> str:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -84,14 +91,22 @@ class Settings:
     chat_model: str
     embedding_base_url: str
     embedding_model: str
+    embedding_revision: str
+    embedding_dimensions: int
+    embedding_batch_size: int
     model_context_tokens: int
     model_max_tokens: int
-    knowledge_base_path: Path
     source_manifest_path: Path
     service_priorities_path: Path
     rag_chunk_size: int
     rag_chunk_overlap: int
     rag_top_k: int
+    rag_dense_weight: float
+    rag_min_score: float
+    rag_candidate_multiplier: int
+    rag_excerpt_chars: int
+    source_max_age_days: int
+    source_max_bytes: int
     request_timeout: float
     health_timeout: float
     session_ttl_seconds: int
@@ -131,12 +146,6 @@ class Settings:
         for origin in origins:
             _validate_http_url("CORS_ORIGINS", origin)
 
-        knowledge_base_path = Path(
-            os.getenv("RAG_KNOWLEDGE_BASE_PATH", "knowledge_base")
-        ).expanduser()
-        if not knowledge_base_path.is_absolute():
-            knowledge_base_path = Path(__file__).resolve().parent / knowledge_base_path
-
         source_manifest_path = Path(
             os.getenv("SOURCE_MANIFEST_PATH", "knowledge_base/sources.json")
         ).expanduser()
@@ -165,6 +174,17 @@ class Settings:
             raise ConfigurationError(
                 "RAG_CHUNK_OVERLAP должен быть меньше RAG_CHUNK_SIZE"
             )
+        embedding_dimensions = _parse_int("EMBEDDING_DIMENSIONS", 1024)
+        if embedding_dimensions != 1024:
+            raise ConfigurationError(
+                "EMBEDDING_DIMENSIONS должен быть 1024 для текущей схемы pgvector"
+            )
+        embedding_revision = os.getenv(
+            "EMBEDDING_MODEL_REVISION",
+            "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+        ).strip()
+        if not embedding_revision:
+            raise ConfigurationError("EMBEDDING_MODEL_REVISION не должен быть пустым")
 
         log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
@@ -201,14 +221,22 @@ class Settings:
             embedding_model=os.getenv(
                 "EMBEDDING_MODEL", "Qwen3-Embedding-0.6B"
             ).strip(),
+            embedding_revision=embedding_revision,
+            embedding_dimensions=embedding_dimensions,
+            embedding_batch_size=_parse_int("EMBEDDING_BATCH_SIZE", 16),
             model_context_tokens=_parse_int("MODEL_CONTEXT_TOKENS", 8192),
             model_max_tokens=_parse_int("MODEL_MAX_TOKENS", 768),
-            knowledge_base_path=knowledge_base_path,
             source_manifest_path=source_manifest_path,
             service_priorities_path=service_priorities_path,
             rag_chunk_size=chunk_size,
             rag_chunk_overlap=chunk_overlap,
             rag_top_k=_parse_int("RAG_TOP_K", 3),
+            rag_dense_weight=_parse_ratio("RAG_DENSE_WEIGHT", 0.8),
+            rag_min_score=_parse_ratio("RAG_MIN_SCORE", 0.3),
+            rag_candidate_multiplier=_parse_int("RAG_CANDIDATE_MULTIPLIER", 8),
+            rag_excerpt_chars=_parse_int("RAG_EXCERPT_CHARS", 800),
+            source_max_age_days=_parse_int("SOURCE_MAX_AGE_DAYS", 180),
+            source_max_bytes=_parse_int("SOURCE_MAX_BYTES", 2_000_000),
             request_timeout=_parse_float("REQUEST_TIMEOUT", 30.0),
             health_timeout=_parse_float("HEALTH_TIMEOUT", 2.0),
             session_ttl_seconds=_parse_int("SESSION_TTL_SECONDS", 7200),

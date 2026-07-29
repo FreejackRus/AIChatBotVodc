@@ -34,6 +34,9 @@ SSE/TTFT, запускает однократную индексацию и то
 .venv/bin/python -m pytest
 .venv/bin/python scripts/run_policy_evals.py
 .venv/bin/python scripts/validate_retrieval_gold.py /secure/retrieval_gold.json
+.venv/bin/python scripts/evaluate_retrieval.py \
+  /secure/retrieval_gold.json --k 5 --minimum-recall 0.90 \
+  --output artifacts/retrieval-report.json
 .venv/bin/python scripts/load_test.py --base-url https://chat.vodc.ru
 ```
 

@@ -10,7 +10,8 @@
 - доменные правила не зависят от HTTP, PostgreSQL, Redis, vLLM и МИС;
 - старые LM Studio CLI, Flask/Jivo compatibility, демонстрационные RAG-модули,
   корневые ручные тесты, IDE/cache-файлы и дубли документов удалены;
-- локальный JSON-индекс остаётся только read-only fallback для разработки;
+- локальные snapshots используются read-only fallback для разработки
+  (старый embedding JSON удалён на этапе 4);
 - production RAG использует PostgreSQL/pgvector;
 - основная модель: `Qwen/Qwen3.5-9B`;
 - embedding: `Qwen/Qwen3-Embedding-0.6B`;

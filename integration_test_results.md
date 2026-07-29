@@ -8,6 +8,8 @@
 - emergency/refusal/prompt-injection policy;
 - очистка ПДн;
 - MIS fallback;
+- fail-closed manifest, атомарный ingestion и пропуск неизменённых источников;
+- query instruction, hybrid retrieval и Recall@5 evaluation protocol;
 - протокол model benchmark и контрольный набор из 20 сценариев;
 - отсутствие legacy `/chat`.
 

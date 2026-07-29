@@ -58,3 +58,22 @@ MODEL_TTFT = Histogram(
     ("replica",),
     buckets=(0.5, 1, 2, 3, 5, 7.5, 10, 15, 20, 30, 60),
 )
+RAG_SEARCHES = Counter(
+    "vodc_rag_searches_total",
+    "Knowledge searches by result.",
+    ("result",),
+)
+RAG_SEARCH_SECONDS = Histogram(
+    "vodc_rag_search_duration_seconds",
+    "End-to-end knowledge search duration.",
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+)
+KNOWLEDGE_INGESTION_RUNS = Counter(
+    "vodc_knowledge_ingestion_runs_total",
+    "Knowledge ingestion runs by result.",
+    ("result",),
+)
+KNOWLEDGE_INGESTION_CHUNKS = Counter(
+    "vodc_knowledge_ingestion_chunks_total",
+    "Chunks replaced by successful ingestion runs.",
+)

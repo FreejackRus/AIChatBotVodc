@@ -1,12 +1,19 @@
 [
   {
     "query": "Где находится диагностический центр?",
-    "expected_urls": ["https://vodc.ru/"],
+    "expected_urls": ["https://vodc.ru/contacts/"],
     "critical": false
   },
   {
     "query": "Что означает ВОККДЦ?",
     "expected_urls": ["https://vodc.ru/about/"],
     "critical": false
+  },
+  {
+    "query": "Как подготовиться к сдаче венозной крови?",
+    "expected_urls": [
+      "https://vodc.ru/podgotovka-k-issledovaniyam/podgotovka-k-laboratornym-issledovaniyam/"
+    ],
+    "critical": true
   }
 ]

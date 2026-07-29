@@ -10,6 +10,10 @@ scrape_configs:
     static_configs:
       - targets: ["api:5000"]
 
+  - job_name: vodc-worker
+    static_configs:
+      - targets: ["worker:9101"]
+
   - job_name: vllm-primary
     static_configs:
       - targets: ["vllm-primary:8000"]

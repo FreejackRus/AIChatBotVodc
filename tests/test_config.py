@@ -14,3 +14,17 @@ def test_invalid_timeout_is_rejected(monkeypatch):
     monkeypatch.setenv("REQUEST_TIMEOUT", "not-a-number")
     with pytest.raises(ConfigurationError):
         Settings.from_env()
+
+
+def test_embedding_dimension_must_match_pgvector_schema(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://vodc.ru")
+    monkeypatch.setenv("EMBEDDING_DIMENSIONS", "768")
+    with pytest.raises(ConfigurationError, match="1024"):
+        Settings.from_env()
+
+
+def test_embedding_revision_is_required(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://vodc.ru")
+    monkeypatch.setenv("EMBEDDING_MODEL_REVISION", "")
+    with pytest.raises(ConfigurationError, match="REVISION"):
+        Settings.from_env()

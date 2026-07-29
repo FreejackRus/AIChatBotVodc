@@ -18,6 +18,18 @@ x-app-environment: &app-environment
   MODEL_MAX_TOKENS: 768
   EMBEDDING_BASE_URL: http://vllm-embedding:8000
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Qwen3-Embedding-0.6B}
+  EMBEDDING_MODEL_REVISION: ${EMBEDDING_MODEL_REVISION:-97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3}
+  EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+  EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-16}
+  RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1000}
+  RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-200}
+  RAG_TOP_K: ${RAG_TOP_K:-5}
+  RAG_DENSE_WEIGHT: ${RAG_DENSE_WEIGHT:-0.8}
+  RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.3}
+  RAG_CANDIDATE_MULTIPLIER: ${RAG_CANDIDATE_MULTIPLIER:-8}
+  RAG_EXCERPT_CHARS: ${RAG_EXCERPT_CHARS:-800}
+  SOURCE_MAX_AGE_DAYS: ${SOURCE_MAX_AGE_DAYS:-180}
+  SOURCE_MAX_BYTES: ${SOURCE_MAX_BYTES:-2000000}
   MEDANGEL_API_URL: ${MEDANGEL_API_URL:-}
   MEDANGEL_API_KEY: ${MEDANGEL_API_KEY:-}
   MEDANGEL_SERVICES_PATH: ${MEDANGEL_SERVICES_PATH:-/services}
@@ -25,7 +37,6 @@ x-app-environment: &app-environment
   MEDANGEL_SLOTS_PATH: ${MEDANGEL_SLOTS_PATH:-/schedule}
   VODC_APPOINTMENT_URL: ${VODC_APPOINTMENT_URL:-https://vodc.ru/appointment/}
   YANDEX_METRIKA_ID: ${YANDEX_METRIKA_ID:-}
-  RAG_KNOWLEDGE_BASE_PATH: /app/knowledge_base
   SOURCE_MANIFEST_PATH: /app/knowledge_base/sources.json
   SERVICE_PRIORITIES_PATH: /app/config/service_priorities.json
   REQUEST_TIMEOUT: 30
@@ -61,6 +72,7 @@ services:
       <<: *app-environment
       WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-86400}
       WORKER_RETRY_SECONDS: ${WORKER_RETRY_SECONDS:-60}
+      WORKER_METRICS_PORT: 9101
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,6 +80,13 @@ services:
         condition: service_healthy
     volumes:
       - ./knowledge_base:/app/knowledge_base:ro
+    expose:
+      - "9101"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9101/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     networks: [vodc]
 

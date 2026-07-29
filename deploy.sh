@@ -57,10 +57,9 @@ if [[ "${ENABLE_GPU_PROFILE:-true}" == "true" ]]; then
 fi
 
 "${compose[@]}" up -d --wait --wait-timeout "${wait_timeout}" \
-    api worker prometheus grafana
-"${compose[@]}" stop worker
+    api prometheus grafana
 "${compose[@]}" run --rm worker python -m app.worker --once
-"${compose[@]}" up -d worker
+"${compose[@]}" up -d --wait --wait-timeout "${wait_timeout}" worker
 
 if [[ "${ENABLE_GPU_PROFILE:-true}" == "true" ]]; then
     "${compose[@]}" exec -T api python scripts/inference_smoke.py \

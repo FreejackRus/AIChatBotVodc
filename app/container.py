@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from config import ConfigurationError, Settings
 
 from .adapters.event_store import InMemoryEventStore, PostgresEventStore
-from .adapters.knowledge import JsonKnowledgeAdapter, PostgresKnowledgeAdapter
+from .adapters.knowledge import LocalKnowledgeAdapter, PostgresKnowledgeAdapter
 from .adapters.medangel import MedAngelAdapter
 from .adapters.model_gateway import VLLMModelGateway
 from .adapters.session_store import InMemorySessionStore, RedisSessionStore
@@ -58,11 +58,23 @@ def build_container(settings: Settings) -> ApplicationContainer:
             settings.database_url,
             settings.embedding_base_url,
             settings.embedding_model,
+            settings.embedding_revision,
+            settings.embedding_dimensions,
             settings.request_timeout,
+            settings.rag_dense_weight,
+            settings.rag_min_score,
+            settings.rag_candidate_multiplier,
+            settings.source_max_age_days,
+            settings.rag_excerpt_chars,
         )
         if settings.database_url
-        else JsonKnowledgeAdapter(
-            settings.knowledge_base_path, settings.source_manifest_path
+        else LocalKnowledgeAdapter(
+            settings.source_manifest_path,
+            settings.rag_chunk_size,
+            settings.rag_chunk_overlap,
+            settings.source_max_age_days,
+            settings.source_max_bytes,
+            settings.rag_excerpt_chars,
         )
     )
     model = VLLMModelGateway(

@@ -25,6 +25,30 @@ Grafana доступна только через `127.0.0.1:3000`. Рабоча�
 `ops/alert-rules.yml`; production-владелец обязан подключить их к принятому
 каналу оповещения.
 
+## База знаний
+
+После изменения `knowledge_base/sources.json` или snapshots:
+
+```bash
+docker compose --profile gpu run --rm worker python -m app.worker --once
+docker compose exec -T postgres psql -U vodc -d vodc -c \
+  "SELECT url, enabled, reviewed_at, expires_at, indexed_at FROM knowledge_sources ORDER BY url"
+docker compose exec -T postgres psql -U vodc -d vodc -c \
+  "SELECT completed_at, stats FROM knowledge_index_runs ORDER BY completed_at DESC LIMIT 5"
+```
+
+Не включать источник при отсутствии владельца и даты проверки. Ошибка worker
+до транзакции оставляет предыдущий индекс рабочим. После успешного цикла
+`/health/ready` должен подтверждать knowledge dependency.
+
+Production retrieval gate:
+
+```bash
+.venv/bin/python scripts/evaluate_retrieval.py \
+  /secure/retrieval_gold.json --k 5 --minimum-recall 0.90 \
+  --output artifacts/retrieval-report.json
+```
+
 ## Деградация
 
 - Одна vLLM-реплика недоступна: gateway продолжает round-robin; ошибочный
@@ -49,7 +73,8 @@ Grafana доступна только через `127.0.0.1:3000`. Рабоча�
 3. Выполнить `docker compose --profile gpu up -d`.
 4. Выполнить `scripts/inference_smoke.py`, проверить live/ready и один
    разрешённый, refusal и booking сценарий.
-5. Миграция `001_initial.sql` аддитивная; откат БД не требуется.
+5. Миграции `001_initial.sql` и `002_knowledge_pipeline.sql` аддитивные;
+   откат БД не требуется.
 
 Немедленный stop: ПДн в журнале, запрещённый медицинский ответ,
 несанкционированное действие МИС или неподтверждённый критический факт.

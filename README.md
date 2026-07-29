@@ -27,6 +27,8 @@
 [docs/STAGE_2_ARCHITECTURE.md](docs/STAGE_2_ARCHITECTURE.md).
 Локальный inference, GPU preflight, smoke и мониторинг этапа 3 описаны в
 [docs/STAGE_3_INFERENCE.md](docs/STAGE_3_INFERENCE.md).
+Управляемая база знаний, атомарный ingestion и hybrid retrieval этапа 4
+описаны в [docs/STAGE_4_KNOWLEDGE_RAG.md](docs/STAGE_4_KNOWLEDGE_RAG.md).
 
 ## Локальный запуск
 
@@ -37,9 +39,10 @@ cp .env.example .env
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 5000
 ```
 
-Без `REDIS_URL` и `DATABASE_URL` включаются только локальные in-memory/JSON
-адаптеры. Это режим разработки, а не production. Модель и МИС могут быть
-недоступны; `/health/ready` показывает состояние каждой зависимости.
+Без `REDIS_URL` и `DATABASE_URL` включаются in-memory-адаптеры и read-only
+lexical retrieval над утверждёнными snapshots. Это режим разработки, а не
+production. Модель и МИС могут быть недоступны; `/health/ready` показывает
+состояние каждой зависимости.
 
 Виджет: `http://localhost:5000/`. OpenAPI: `http://localhost:5000/docs`.
 
@@ -55,6 +58,10 @@ cp .env.example .env
   --chat-url http://127.0.0.1:8002 \
   --embedding-url http://127.0.0.1:8001
 .venv/bin/python scripts/validate_retrieval_gold.py /secure/retrieval_gold.json
+.venv/bin/python scripts/evaluate_retrieval.py \
+  /secure/retrieval_gold.json \
+  --k 5 --minimum-recall 0.90 \
+  --output artifacts/retrieval-report.json
 .venv/bin/python scripts/load_test.py --base-url https://chat.vodc.ru
 .venv/bin/python scripts/smoke_test.py --base-url http://localhost:5000
 ```
@@ -67,7 +74,7 @@ Gold set должен содержать 100–200 утверждённых за
 1. Заполнить защищённый `.env` по `.env.production`.
 2. Зафиксировать `VLLM_IMAGE` по одобренной версии или digest.
 3. Согласовать mapping реального API «МедАнгел».
-4. Заполнить allowlist источников и список приоритетов.
+4. Утвердить snapshots/allowlist источников и список приоритетов.
 5. Выполнить `.venv/bin/python scripts/inference_preflight.py`.
 6. Запустить `./deploy.sh`: он ждёт health-check, выполняет inference smoke,
    индексацию и требует успешный `/health/ready`.

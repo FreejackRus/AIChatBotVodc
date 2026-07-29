@@ -33,6 +33,22 @@ groups:
         annotations:
           summary: Embedding-сервис vLLM недоступен
 
+      - alert: VodcWorkerUnavailable
+        expr: up{job="vodc-worker"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker базы знаний недоступен
+
+      - alert: VodcKnowledgeIngestionFailed
+        expr: increase(vodc_knowledge_ingestion_runs_total{result="error"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Последний цикл индексации базы знаний завершился ошибкой
+
       - alert: VodcModelTtftHigh
         expr: histogram_quantile(0.95, sum by (le) (rate(vodc_model_time_to_first_token_seconds_bucket[5m]))) > 10
         for: 10m

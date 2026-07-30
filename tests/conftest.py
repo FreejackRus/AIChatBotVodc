@@ -68,7 +68,7 @@ class FakeMedAngel:
 
             raise MedAngelUnavailable("MIS unavailable")
 
-    async def search_services(self, query):
+    async def search_services(self, query, *, fresh=False):
         self._check()
         self.search_calls += 1
         return [
@@ -80,7 +80,7 @@ class FakeMedAngel:
             )
         ]
 
-    async def doctors(self, service_id, branch_id=None):
+    async def doctors(self, service_id, branch_id=None, *, fresh=False):
         self._check()
         return [
             Doctor(
@@ -92,7 +92,9 @@ class FakeMedAngel:
             )
         ]
 
-    async def slots(self, service_id, doctor_id=None, branch_id=None):
+    async def slots(
+        self, service_id, doctor_id=None, branch_id=None, *, fresh=False
+    ):
         self._check()
         return [
             Slot(
@@ -106,17 +108,30 @@ class FakeMedAngel:
 
     async def validate_service(self, service_id):
         return (
-            (await self.search_services(service_id))[0]
+            (await self.search_services(service_id, fresh=True))[0]
             if service_id == "service-1"
             else None
         )
 
-    async def validate_doctor(self, doctor_id, service_id):
-        return (await self.doctors(service_id))[0] if doctor_id == "doctor-1" else None
-
-    async def validate_slot(self, slot_id, service_id):
+    async def validate_doctor(self, doctor_id, service_id, branch_id=None):
         return (
-            (await self.slots(service_id, "doctor-1", "branch-1"))[0]
+            (await self.doctors(service_id, branch_id, fresh=True))[0]
+            if doctor_id == "doctor-1"
+            else None
+        )
+
+    async def validate_slot(
+        self, slot_id, service_id, doctor_id=None, branch_id=None
+    ):
+        return (
+            (
+                await self.slots(
+                    service_id,
+                    doctor_id or "doctor-1",
+                    branch_id or "branch-1",
+                    fresh=True,
+                )
+            )[0]
             if slot_id == "slot-1"
             else None
         )

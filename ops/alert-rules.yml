@@ -105,6 +105,30 @@ groups:
         annotations:
           summary: Чат часто отклоняет ввод с персональными данными
 
+      - alert: VodcMisContractViolation
+        expr: sum(increase(vodc_mis_requests_total{result="schema_error"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ответ МИС нарушил утверждённый контракт
+
+      - alert: VodcMisRequestFailures
+        expr: sum(increase(vodc_mis_requests_total{result="error"}[10m])) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Повторяются ошибки read-only запросов к МИС
+
+      - alert: VodcMisLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(vodc_mis_request_duration_seconds_bucket[10m]))) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: p95 времени ответа МИС превышает 3 секунды
+
   - name: vodc-gpu
     rules:
       - alert: VodcGpuTelemetryUnavailable

@@ -27,8 +27,8 @@ curl --fail https://chat.vodc.ru/health/ready
 ```
 
 Grafana доступна только через `127.0.0.1:3000`. Рабочие панели:
-`VODC inference`, `VODC knowledge and RAG` и
-`VODC safety and guardrails`. Prometheus rules находятся в
+`VODC inference`, `VODC knowledge and RAG`, `VODC safety and guardrails` и
+`VODC MedAngel integration`. Prometheus rules находятся в
 `ops/alert-rules.yml`; production-владелец обязан подключить их к принятому
 каналу оповещения.
 
@@ -128,6 +128,13 @@ Publisher никогда не запускается автоматически 
   только request/session ID из защищённого технического контура, остановить
   proactive invitation, воспроизвести кейс в red-team-наборе и не
   возобновлять пилот до классификации медицинским/safety-владельцем.
+
+При `VodcMisContractViolation` отключить booking-воронку/proactive invitation,
+не очищать Redis-кеш вручную до сохранения технических request ID, сверить
+фактический ответ с утверждённым fixture и OpenAPI. Не ослаблять mapping для
+пропуска повреждённого ответа: вернуть предыдущую совместимую версию адаптера
+или дождаться исправления стенда. Пользователю оставить штатную публичную
+страницу записи без параметров слота.
 
 Проверка guardrails после обновления правил или модели:
 

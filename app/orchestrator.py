@@ -190,6 +190,9 @@ class DialogOrchestrator:
                 if not service:
                     raise MessageRejected("Услуга больше недоступна")
                 session.selection.service_id = service.id
+                session.selection.branch_id = (
+                    service.branch_id or session.selection.branch_id
+                )
                 session.selection.doctor_id = None
                 session.selection.slot_id = None
                 doctors = await self.medangel.doctors(
@@ -209,7 +212,9 @@ class DialogOrchestrator:
 
             if input_type is InputType.SELECT_DOCTOR:
                 doctor = await self.medangel.validate_doctor(
-                    payload.entity_id, service_id
+                    payload.entity_id,
+                    service_id,
+                    session.selection.branch_id,
                 )
                 if not doctor:
                     raise MessageRejected("Врач больше недоступен для этой услуги")
@@ -227,16 +232,28 @@ class DialogOrchestrator:
                 )
 
             if input_type is InputType.SELECT_SLOT:
-                slot = await self.medangel.validate_slot(payload.entity_id, service_id)
+                slot = await self.medangel.validate_slot(
+                    payload.entity_id,
+                    service_id,
+                    session.selection.doctor_id,
+                    session.selection.branch_id,
+                )
                 if not slot:
                     raise MessageRejected(
                         "Слот уже недоступен. Обновите список времени."
                     )
                 if (
-                    session.selection.doctor_id
-                    and slot.doctor_id != session.selection.doctor_id
+                    slot.service_id != service_id
+                    or (
+                        session.selection.doctor_id
+                        and slot.doctor_id != session.selection.doctor_id
+                    )
+                    or (
+                        session.selection.branch_id
+                        and slot.branch_id != session.selection.branch_id
+                    )
                 ):
-                    raise MessageRejected("Слот относится к другому врачу")
+                    raise MessageRejected("Слот не соответствует текущему выбору")
                 session.selection.slot_id = slot.id
                 session.selection.doctor_id = slot.doctor_id
                 session.selection.branch_id = (

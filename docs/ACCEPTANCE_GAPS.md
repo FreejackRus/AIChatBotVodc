@@ -4,7 +4,8 @@
 создать внутри репозитория без данных и инфраструктуры Заказчика:
 
 1. Swagger/OpenAPI, URL и учётные данные тестовой МИС «МедАнгел».
-2. Утверждённый mapping DTO и обезличенные contract fixtures.
+2. Утверждённый mapping DTO и обезличенные contract fixtures, заменяющие
+   временные aliases из `docs/MEDANGEL_CONTRACT.md`.
 3. Gold set из 100–200 запросов с эталонными URL.
 4. Утверждённые медицинским ответственным emergency/refusal тексты,
    триггеры и red-team-набор.

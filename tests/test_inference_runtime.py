@@ -106,3 +106,16 @@ def test_stage_5_guardrail_observability_artifacts_are_wired():
     assert "vodc_guardrail_decisions_total" in alerts
     assert dashboard["uid"] == "vodc-safety"
     assert len(dashboard["panels"]) >= 4
+
+
+def test_stage_6_mis_observability_artifacts_are_wired():
+    alerts = (ROOT / "ops/alert-rules.yml").read_text(encoding="utf-8")
+    dashboard = json.loads(
+        (ROOT / "ops/dashboards/vodc-mis.json").read_text(encoding="utf-8")
+    )
+
+    assert "VodcMisContractViolation" in alerts
+    assert "VodcMisRequestFailures" in alerts
+    assert "vodc_mis_requests_total" in alerts
+    assert dashboard["uid"] == "vodc-mis"
+    assert len(dashboard["panels"]) >= 5

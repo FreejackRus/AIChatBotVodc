@@ -81,6 +81,23 @@ def _validate_vodc_url(name: str, value: str) -> str:
     return normalized
 
 
+def _validate_api_path(name: str, value: str) -> str:
+    normalized = value.strip()
+    parsed = urlparse(normalized)
+    if (
+        not normalized.startswith("/")
+        or normalized.startswith("//")
+        or parsed.scheme
+        or parsed.netloc
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ConfigurationError(
+            f"{name} должен быть относительным API path, начинающимся с /"
+        )
+    return normalized
+
+
 def _csv(name: str, default: str, *, strip_slash: bool = True) -> tuple[str, ...]:
     values = tuple(
         (value.strip().rstrip("/") if strip_slash else value.strip())
@@ -148,9 +165,12 @@ class Settings:
     medangel_services_path: str
     medangel_doctors_path: str
     medangel_slots_path: str
+    medangel_health_path: str
     appointment_url: str
     mis_catalog_cache_seconds: int
     mis_slots_cache_seconds: int
+    mis_cache_max_entries: int
+    mis_max_response_bytes: int
     analytics_measurement_id: str | None
     log_level: str
 
@@ -233,6 +253,19 @@ class Settings:
         )
         if environment == "production" and signing_secret.startswith("dev-only"):
             raise ConfigurationError("SIGNING_SECRET обязан быть заменён в production")
+        medangel_api_url = _optional_http_url(
+            "MEDANGEL_API_URL", os.getenv("MEDANGEL_API_URL", "")
+        )
+        if environment == "production" and not medangel_api_url:
+            raise ConfigurationError("MEDANGEL_API_URL обязателен в production")
+        medangel_api_key = os.getenv("MEDANGEL_API_KEY", "").strip() or None
+        if environment == "production" and (
+            "replace_with" in (medangel_api_url or "").lower()
+            or "replace_with" in (medangel_api_key or "").lower()
+        ):
+            raise ConfigurationError(
+                "Placeholder MEDANGEL_API_URL/MEDANGEL_API_KEY запрещён в production"
+            )
 
         return cls(
             app_host=os.getenv("APP_HOST", "0.0.0.0"),
@@ -313,18 +346,25 @@ class Settings:
                 "PERSISTENCE_REQUIRED", environment == "production"
             ),
             signing_secret=signing_secret,
-            medangel_api_url=_optional_http_url(
-                "MEDANGEL_API_URL", os.getenv("MEDANGEL_API_URL", "")
+            medangel_api_url=medangel_api_url,
+            medangel_api_key=medangel_api_key,
+            medangel_services_path=_validate_api_path(
+                "MEDANGEL_SERVICES_PATH",
+                os.getenv("MEDANGEL_SERVICES_PATH", "/services"),
             ),
-            medangel_api_key=os.getenv("MEDANGEL_API_KEY", "").strip() or None,
-            medangel_services_path=os.getenv(
-                "MEDANGEL_SERVICES_PATH", "/services"
-            ).strip(),
-            medangel_doctors_path=os.getenv(
-                "MEDANGEL_DOCTORS_PATH", "/doctors"
-            ).strip(),
-            medangel_slots_path=os.getenv("MEDANGEL_SLOTS_PATH", "/schedule").strip(),
-            appointment_url=_validate_http_url(
+            medangel_doctors_path=_validate_api_path(
+                "MEDANGEL_DOCTORS_PATH",
+                os.getenv("MEDANGEL_DOCTORS_PATH", "/doctors"),
+            ),
+            medangel_slots_path=_validate_api_path(
+                "MEDANGEL_SLOTS_PATH",
+                os.getenv("MEDANGEL_SLOTS_PATH", "/schedule"),
+            ),
+            medangel_health_path=_validate_api_path(
+                "MEDANGEL_HEALTH_PATH",
+                os.getenv("MEDANGEL_HEALTH_PATH", "/health"),
+            ),
+            appointment_url=_validate_vodc_url(
                 "VODC_APPOINTMENT_URL",
                 os.getenv(
                     "VODC_APPOINTMENT_URL",
@@ -333,6 +373,10 @@ class Settings:
             ),
             mis_catalog_cache_seconds=_parse_int("MIS_CATALOG_CACHE_SECONDS", 300),
             mis_slots_cache_seconds=_parse_int("MIS_SLOTS_CACHE_SECONDS", 30),
+            mis_cache_max_entries=_parse_int("MIS_CACHE_MAX_ENTRIES", 512),
+            mis_max_response_bytes=_parse_int(
+                "MIS_MAX_RESPONSE_BYTES", 2_000_000
+            ),
             analytics_measurement_id=os.getenv("YANDEX_METRIKA_ID", "").strip() or None,
             log_level=log_level,
         )

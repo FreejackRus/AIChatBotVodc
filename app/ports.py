@@ -76,21 +76,38 @@ class ModelPort(Protocol):
 
 
 class MedAngelPort(Protocol):
-    async def search_services(self, query: str) -> list[Service]: ...
+    async def search_services(
+        self, query: str, *, fresh: bool = False
+    ) -> list[Service]: ...
     async def doctors(
-        self, service_id: str, branch_id: str | None = None
+        self,
+        service_id: str,
+        branch_id: str | None = None,
+        *,
+        fresh: bool = False,
     ) -> list[Doctor]: ...
     async def slots(
         self,
         service_id: str,
         doctor_id: str | None = None,
         branch_id: str | None = None,
+        *,
+        fresh: bool = False,
     ) -> list[Slot]: ...
     async def validate_service(self, service_id: str) -> Service | None: ...
     async def validate_doctor(
-        self, doctor_id: str, service_id: str
+        self,
+        doctor_id: str,
+        service_id: str,
+        branch_id: str | None = None,
     ) -> Doctor | None: ...
-    async def validate_slot(self, slot_id: str, service_id: str) -> Slot | None: ...
+    async def validate_slot(
+        self,
+        slot_id: str,
+        service_id: str,
+        doctor_id: str | None = None,
+        branch_id: str | None = None,
+    ) -> Slot | None: ...
     def booking_url(self, session: ChatSession) -> str: ...
     async def ping(self) -> bool: ...
     async def close(self) -> None: ...

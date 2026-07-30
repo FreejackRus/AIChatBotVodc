@@ -50,3 +50,7 @@ DATABASE_URL='postgresql://vodc:vodc@127.0.0.1:5432/vodc' \
 
 PR нельзя сливать при красном quality или migration job. Production-пилот
 нельзя запускать только на основании зелёного репозиторного CI.
+
+Mock contract tests `tests/test_medangel_adapter.py` входят в полный
+`pytest` и проверяют fail-closed границу, кеш, retry и live validation. Они
+не заменяют fixtures реального тестового стенда.

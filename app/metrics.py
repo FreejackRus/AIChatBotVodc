@@ -63,6 +63,22 @@ MODEL_TTFT = Histogram(
     ("replica",),
     buckets=(0.5, 1, 2, 3, 5, 7.5, 10, 15, 20, 30, 60),
 )
+MIS_REQUESTS = Counter(
+    "vodc_mis_requests_total",
+    "Read-only MIS requests by resource and result.",
+    ("resource", "result"),
+)
+MIS_CACHE = Counter(
+    "vodc_mis_cache_total",
+    "MIS cache lookups by resource and result.",
+    ("resource", "result"),
+)
+MIS_REQUEST_SECONDS = Histogram(
+    "vodc_mis_request_duration_seconds",
+    "Read-only MIS request duration.",
+    ("resource",),
+    buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20, 30),
+)
 RAG_SEARCHES = Counter(
     "vodc_rag_searches_total",
     "Knowledge searches by result.",

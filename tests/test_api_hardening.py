@@ -110,6 +110,78 @@ def test_card_actions_are_signed_and_booking_is_live_validated(api, create_sessi
     assert "slot_id=slot-1" in booking.json()["url"]
 
 
+def test_booking_rejects_a_slot_token_that_is_not_the_current_selection(
+    api, create_session
+):
+    session_id = create_session()["session_id"]
+    token = api["container"].orchestrator.signer.issue(
+        session_id, "select_slot", "slot-other"
+    )
+
+    booking = api["client"].post(
+        f"/api/v1/sessions/{session_id}/booking-link",
+        json={"slot_token": token},
+    )
+
+    assert booking.status_code == 409
+    assert booking.json()["detail"]["code"] == "slot_unavailable"
+
+
+def test_booking_rejects_mis_slot_outside_current_selection(
+    api, create_session, monkeypatch
+):
+    session_id = create_session()["session_id"]
+    discovery = parse_sse(
+        post_input(
+            api["client"],
+            session_id,
+            {"type": "text", "text": "Нужно МРТ"},
+        )
+    )
+    service_action = event_data(discovery, "cards")[0]["items"][0]["actions"][0]
+    service_selection = parse_sse(
+        post_input(
+            api["client"],
+            session_id,
+            {"type": service_action["type"], "token": service_action["token"]},
+        )
+    )
+    doctor_action = event_data(service_selection, "cards")[0]["items"][0]["actions"][0]
+    doctor_selection = parse_sse(
+        post_input(
+            api["client"],
+            session_id,
+            {"type": doctor_action["type"], "token": doctor_action["token"]},
+        )
+    )
+    slot_action = event_data(doctor_selection, "cards")[0]["items"][0]["actions"][0]
+    post_input(
+        api["client"],
+        session_id,
+        {"type": slot_action["type"], "token": slot_action["token"]},
+    )
+
+    async def wrong_slot(slot_id, service_id, doctor_id=None, branch_id=None):
+        from app.domain.models import Slot
+
+        return Slot(
+            id=slot_id,
+            starts_at="2026-08-01T10:00:00+03:00",
+            doctor_id="another-doctor",
+            service_id=service_id,
+            branch_id=branch_id,
+        )
+
+    monkeypatch.setattr(api["mis"], "validate_slot", wrong_slot)
+    booking = api["client"].post(
+        f"/api/v1/sessions/{session_id}/booking-link",
+        json={"slot_token": slot_action["token"]},
+    )
+
+    assert booking.status_code == 409
+    assert booking.json()["detail"]["code"] == "slot_unavailable"
+
+
 def test_emergency_and_medical_requests_never_reach_model(api, create_session):
     session_id = create_session()["session_id"]
     model_calls = api["model"].calls

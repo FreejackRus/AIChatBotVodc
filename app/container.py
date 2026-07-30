@@ -7,6 +7,7 @@ from config import ConfigurationError, Settings
 from .adapters.event_store import InMemoryEventStore, PostgresEventStore
 from .adapters.knowledge import LocalKnowledgeAdapter, PostgresKnowledgeAdapter
 from .adapters.medangel import MedAngelAdapter
+from .adapters.mis_cache import InMemoryMISResponseCache, RedisMISResponseCache
 from .adapters.model_gateway import VLLMModelGateway
 from .adapters.session_store import InMemorySessionStore, RedisSessionStore
 from .domain.priorities import ServicePrioritizer
@@ -93,6 +94,13 @@ def build_container(settings: Settings) -> ApplicationContainer:
         settings.request_timeout,
         settings.mis_catalog_cache_seconds,
         settings.mis_slots_cache_seconds,
+        health_path=settings.medangel_health_path,
+        max_response_bytes=settings.mis_max_response_bytes,
+        cache=(
+            RedisMISResponseCache(settings.redis_url)
+            if settings.redis_url
+            else InMemoryMISResponseCache(settings.mis_cache_max_entries)
+        ),
     )
     orchestrator = DialogOrchestrator(
         sessions,

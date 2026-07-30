@@ -14,6 +14,7 @@ flowchart LR
     L --> G[Output guardrail]
     G -->|validated fragments| A
     A --> R[(Redis, raw session TTL 2h)]
+    M --> C[(Redis, hashed MIS cache)]
     A --> D[PII redactor]
     D --> P[(PostgreSQL, redacted 90d)]
     K --> P
@@ -72,3 +73,9 @@ similarity и русский полнотекстовый GIN-поиск, пос
 неактуальные источники и результаты ниже порога. Источник с признаками
 инструкции для модели отклоняется до embedding и также не загружается
 локальным fallback.
+
+Read-only MIS adapter проверяет response envelope, типы, timezone и связи
+`service/doctor/branch/slot` до создания карточек. Кеш справочников и
+расписания разделён по TTL; cache key не содержит открытого пользовательского
+текста. Выбор сущности и booking redirect всегда выполняют свежий запрос в
+обход кеша. Изменяющих методов МИС во внутреннем порте нет.

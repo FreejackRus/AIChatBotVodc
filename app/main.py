@@ -304,11 +304,31 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
             service_id = session.selection.service_id
             if not service_id:
                 raise InvalidActionToken("Сначала выберите услугу")
+            if (
+                session.state is not FunnelState.SLOT_SELECTED
+                or session.selection.slot_id != token.entity_id
+            ):
+                raise InvalidActionToken("Сначала заново выберите доступное время")
             slot = await application_container.medangel.validate_slot(
-                token.entity_id, service_id
+                token.entity_id,
+                service_id,
+                session.selection.doctor_id,
+                session.selection.branch_id,
             )
             if not slot:
                 raise InvalidActionToken("Слот уже недоступен")
+            if (
+                slot.service_id != service_id
+                or (
+                    session.selection.doctor_id
+                    and slot.doctor_id != session.selection.doctor_id
+                )
+                or (
+                    session.selection.branch_id
+                    and slot.branch_id != session.selection.branch_id
+                )
+            ):
+                raise InvalidActionToken("Слот не соответствует текущему выбору")
         except InvalidActionToken as exc:
             raise HTTPException(
                 status_code=409,

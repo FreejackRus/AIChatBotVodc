@@ -33,6 +33,8 @@
 Детерминированные разрешения, input/output guardrails и red-team gate этапа 5
 описаны в
 [docs/STAGE_5_AGENT_GUARDRAILS.md](docs/STAGE_5_AGENT_GUARDRAILS.md).
+Read-only граница МИС, live validation, кеши и внешний contract gate этапа 6
+описаны в [docs/STAGE_6_MIS.md](docs/STAGE_6_MIS.md).
 
 ## Локальный запуск
 

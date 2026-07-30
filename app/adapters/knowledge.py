@@ -10,10 +10,11 @@ from typing import Any
 import asyncpg
 import httpx
 
-from ..domain.models import SourceRef
+from ..domain.models import RetrievalContext, SourceRef
+from ..domain.retrieval import canonical_vodc_page_key
 from ..domain.safety import contains_prompt_injection
 from ..ingestion import ManifestSource, chunk_text, load_manifest
-from ..metrics import RAG_SEARCH_SECONDS, RAG_SEARCHES
+from ..metrics import RAG_CONTEXT, RAG_SEARCH_SECONDS, RAG_SEARCHES
 from ..ports import KnowledgeUnavailable
 
 QUERY_INSTRUCTION = (
@@ -61,9 +62,12 @@ class LocalKnowledgeAdapter:
         source_max_age_days: int,
         source_max_bytes: int,
         excerpt_chars: int,
+        *,
+        context_boost: float = 0.15,
     ):
         self.excerpt_chars = excerpt_chars
         self.source_max_age_days = source_max_age_days
+        self.context_boost = context_boost
         root = manifest_path.parent.resolve()
         chunks: list[LocalChunk] = []
         for source in load_manifest(manifest_path):
@@ -87,23 +91,41 @@ class LocalKnowledgeAdapter:
                 chunks.append(LocalChunk(source, position, chunk))
         self.chunks = tuple(chunks)
 
-    async def search(self, query: str, limit: int) -> list[SourceRef]:
+    async def search(
+        self,
+        query: str,
+        limit: int,
+        context: RetrievalContext | None = None,
+    ) -> list[SourceRef]:
         started = time.perf_counter()
         query_terms = _terms(query)
         query_normalized = " ".join(query.lower().split())
+        context_key = (
+            canonical_vodc_page_key(context.page_url) if context is not None else None
+        )
         ranked: list[tuple[float, LocalChunk]] = []
         for chunk in self.chunks:
             if not chunk.source.active(self.source_max_age_days):
                 continue
+            is_context = (
+                context_key is not None
+                and canonical_vodc_page_key(chunk.source.url) == context_key
+            )
             content_terms = _terms(chunk.content)
             title_terms = _terms(chunk.source.title)
             overlap = query_terms & content_terms
-            if not overlap:
+            if not overlap and not is_context:
                 continue
             coverage = len(overlap) / max(1, len(query_terms))
             title_coverage = len(query_terms & title_terms) / max(1, len(query_terms))
             phrase = 1.0 if query_normalized in chunk.content.lower() else 0.0
-            score = 0.75 * coverage + 0.15 * title_coverage + 0.1 * phrase
+            score = min(
+                1.0,
+                0.75 * coverage
+                + 0.15 * title_coverage
+                + 0.1 * phrase
+                + (self.context_boost if is_context else 0),
+            )
             ranked.append((score, chunk))
         ranked.sort(
             key=lambda item: (
@@ -123,6 +145,15 @@ class LocalKnowledgeAdapter:
             )
             for score, chunk in ranked[:limit]
         ]
+        if context is not None:
+            if context_key is None:
+                RAG_CONTEXT.labels("unavailable").inc()
+            elif any(
+                canonical_vodc_page_key(source.url) == context_key for source in result
+            ):
+                RAG_CONTEXT.labels("hit").inc()
+            else:
+                RAG_CONTEXT.labels("fallback").inc()
         RAG_SEARCHES.labels("hit" if result else "empty").inc()
         RAG_SEARCH_SECONDS.observe(time.perf_counter() - started)
         return result
@@ -150,6 +181,8 @@ class PostgresKnowledgeAdapter:
         candidate_multiplier: int,
         source_max_age_days: int,
         excerpt_chars: int,
+        *,
+        context_boost: float = 0.15,
     ):
         self.database_url = database_url
         self.embedding_base_url = embedding_base_url
@@ -162,6 +195,7 @@ class PostgresKnowledgeAdapter:
         self.candidate_multiplier = candidate_multiplier
         self.source_max_age_days = source_max_age_days
         self.excerpt_chars = excerpt_chars
+        self.context_boost = context_boost
         self.pool: asyncpg.Pool | None = None
         self.http = httpx.AsyncClient(timeout=timeout)
 
@@ -193,12 +227,22 @@ class PostgresKnowledgeAdapter:
             raise ValueError("Embedding query contains NaN or Infinity")
         return vector
 
-    async def search(self, query: str, limit: int) -> list[SourceRef]:
+    async def search(
+        self,
+        query: str,
+        limit: int,
+        context: RetrievalContext | None = None,
+    ) -> list[SourceRef]:
         started = time.perf_counter()
         try:
             embedding = await self._embedding(query)
             vector = "[" + ",".join(f"{value:.8f}" for value in embedding) + "]"
             candidate_limit = max(limit, limit * self.candidate_multiplier)
+            context_key = (
+                canonical_vodc_page_key(context.page_url)
+                if context is not None
+                else None
+            )
             pool = await self._pool()
             rows = await pool.fetch(
                 """
@@ -231,10 +275,35 @@ class PostgresKnowledgeAdapter:
                     ) DESC
                     LIMIT $4
                 ),
+                contextual AS (
+                    SELECT c.id
+                    FROM knowledge_chunks c
+                    JOIN knowledge_sources s ON s.id = c.source_id
+                    WHERE $11::text IS NOT NULL
+                      AND s.enabled = true
+                      AND s.reviewed_at >= current_date - $7::integer
+                      AND (s.expires_at IS NULL OR s.expires_at > now())
+                      AND s.embedding_model = $8
+                      AND s.embedding_dimensions = $9
+                      AND s.embedding_revision = $10
+                      AND regexp_replace(
+                            replace(
+                                s.url,
+                                'https://www.vodc.ru',
+                                'https://vodc.ru'
+                            ),
+                            '/+$',
+                            ''
+                          ) = $11
+                    ORDER BY c.embedding <=> $1::vector
+                    LIMIT $4
+                ),
                 candidates AS (
                     SELECT id FROM dense
                     UNION
                     SELECT id FROM lexical
+                    UNION
+                    SELECT id FROM contextual
                 ),
                 ranked AS (
                     SELECT
@@ -243,7 +312,16 @@ class PostgresKnowledgeAdapter:
                         s.url,
                         c.content,
                         s.reviewed_at::text,
-                        (
+                        regexp_replace(
+                            replace(
+                                s.url,
+                                'https://www.vodc.ru',
+                                'https://vodc.ru'
+                            ),
+                            '/+$',
+                            ''
+                        ) = $11 AS context_match,
+                        LEAST(1, (
                             $3 * (1 - (c.embedding <=> $1::vector))
                             + (1 - $3) * LEAST(
                                 ts_rank_cd(
@@ -252,15 +330,29 @@ class PostgresKnowledgeAdapter:
                                 ) * 4,
                                 1
                             )
-                        ) AS score
+                            + CASE
+                                WHEN $11::text IS NOT NULL
+                                 AND regexp_replace(
+                                       replace(
+                                           s.url,
+                                           'https://www.vodc.ru',
+                                           'https://vodc.ru'
+                                       ),
+                                       '/+$',
+                                       ''
+                                     ) = $11
+                                THEN $12::double precision
+                                ELSE 0
+                              END
+                        )) AS score
                     FROM candidates x
                     JOIN knowledge_chunks c ON c.id = x.id
                     JOIN knowledge_sources s ON s.id = c.source_id
                 )
-                SELECT id, title, url, content, reviewed_at, score
+                SELECT id, title, url, content, reviewed_at, context_match, score
                 FROM ranked
                 WHERE score >= $5
-                ORDER BY score DESC, id
+                ORDER BY score DESC, context_match DESC, id
                 LIMIT $6
                 """,
                 vector,
@@ -273,6 +365,8 @@ class PostgresKnowledgeAdapter:
                 self.embedding_model,
                 self.embedding_dimensions,
                 self.embedding_revision,
+                context_key,
+                self.context_boost,
             )
         except (
             OSError,
@@ -299,6 +393,13 @@ class PostgresKnowledgeAdapter:
             )
             for row in rows
         ]
+        if context is not None:
+            if context_key is None:
+                RAG_CONTEXT.labels("unavailable").inc()
+            elif any(bool(row["context_match"]) for row in rows):
+                RAG_CONTEXT.labels("hit").inc()
+            else:
+                RAG_CONTEXT.labels("fallback").inc()
         RAG_SEARCHES.labels("hit" if result else "empty").inc()
         return result
 

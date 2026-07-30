@@ -17,7 +17,11 @@ from app.security import ActionTokenSigner
 class FakeKnowledge:
     ready = True
 
-    async def search(self, query, limit):
+    def __init__(self):
+        self.queries = []
+
+    async def search(self, query, limit, context=None):
+        self.queries.append((query, context))
         return [
             SourceRef(
                 id="source-1",
@@ -161,7 +165,10 @@ def api(monkeypatch, tmp_path):
 
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("CORS_ORIGINS", "http://localhost:5000")
-    monkeypatch.setenv("TRUSTED_PAGE_HOSTS", "localhost,127.0.0.1")
+    monkeypatch.setenv(
+        "TRUSTED_PAGE_HOSTS",
+        "vodc.ru,www.vodc.ru,localhost,127.0.0.1",
+    )
     monkeypatch.setenv("SOURCE_MANIFEST_PATH", str(manifest))
     monkeypatch.setenv("REDIS_URL", "")
     monkeypatch.setenv("DATABASE_URL", "")

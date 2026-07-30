@@ -5,7 +5,7 @@ from scripts.evaluate_retrieval import evaluate
 
 
 class FakeKnowledge:
-    async def search(self, query, limit):
+    async def search(self, query, limit, context=None):
         if "адрес" in query:
             return [
                 SourceRef(

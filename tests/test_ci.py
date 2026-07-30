@@ -22,3 +22,9 @@ def test_ci_runs_quality_policy_compose_and_real_pgvector_migrations():
     assert "knowledge_source_snapshots" in migration_check
     assert "knowledge_publication_events" in migration_check
     assert "ruff==0.16.0" in development
+
+
+def test_widget_sends_fresh_page_context_with_every_message():
+    widget = (ROOT / "widget/script.js").read_text(encoding="utf-8")
+
+    assert "page_context: this.pageContext" in widget

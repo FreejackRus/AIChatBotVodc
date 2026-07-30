@@ -6,7 +6,8 @@
 1. Swagger/OpenAPI, URL и учётные данные тестовой МИС «МедАнгел».
 2. Утверждённый mapping DTO и обезличенные contract fixtures, заменяющие
    временные aliases из `docs/MEDANGEL_CONTRACT.md`.
-3. Gold set из 100–200 запросов с эталонными URL.
+3. Gold set из 100–200 запросов с эталонными URL, включая page-aware
+   формулировки «что здесь/об этом» и global fallback с нерелевантной страницы.
 4. Утверждённые медицинским ответственным emergency/refusal тексты,
    триггеры и red-team-набор.
 5. Подписанный privacy-регламент, PII-текст и проверка detection/redaction.

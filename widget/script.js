@@ -170,7 +170,8 @@ class VodcChatWidget {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         input,
-                        client_message_id: crypto.randomUUID()
+                        client_message_id: crypto.randomUUID(),
+                        page_context: this.pageContext
                     })
                 }
             );

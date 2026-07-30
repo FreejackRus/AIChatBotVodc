@@ -5,7 +5,6 @@ import re
 import time
 from collections.abc import AsyncIterator
 from typing import Any
-from urllib.parse import urlparse
 
 from .domain.funnel import quick_replies, transition
 from .domain.intents import classify_intent, policy_for
@@ -16,6 +15,7 @@ from .domain.models import (
     EntityCard,
     FunnelState,
     InputType,
+    RetrievalContext,
     Service,
     Slot,
 )
@@ -365,14 +365,12 @@ class DialogOrchestrator:
         sources = []
         services: list[Service] = []
         mis_available = True
-        page_path = re.sub(
-            r"[^a-zа-яё0-9/_-]+",
-            " ",
-            urlparse(session.page_context.url).path.lower(),
-        ).replace("-", " ")
-        retrieval_query = f"{user_text} {page_path}".strip()
         try:
-            sources = await self.knowledge.search(retrieval_query, self.rag_top_k)
+            sources = await self.knowledge.search(
+                user_text,
+                self.rag_top_k,
+                RetrievalContext(page_url=session.page_context.url),
+            )
         except KnowledgeUnavailable:
             logger.warning("Knowledge retrieval unavailable", exc_info=True)
         if intent_policy.uses_mis:

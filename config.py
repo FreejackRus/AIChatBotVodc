@@ -132,6 +132,7 @@ class Settings:
     rag_chunk_overlap: int
     rag_top_k: int
     rag_dense_weight: float
+    rag_context_boost: float
     rag_min_score: float
     rag_candidate_multiplier: int
     rag_excerpt_chars: int
@@ -238,6 +239,11 @@ class Settings:
         ).strip()
         if not embedding_revision:
             raise ConfigurationError("EMBEDDING_MODEL_REVISION не должен быть пустым")
+        rag_context_boost = _parse_ratio("RAG_CONTEXT_BOOST", 0.15)
+        if rag_context_boost > 0.5:
+            raise ConfigurationError(
+                "RAG_CONTEXT_BOOST не должен превышать 0.5"
+            )
 
         log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
@@ -298,6 +304,7 @@ class Settings:
             rag_chunk_overlap=chunk_overlap,
             rag_top_k=_parse_int("RAG_TOP_K", 3),
             rag_dense_weight=_parse_ratio("RAG_DENSE_WEIGHT", 0.8),
+            rag_context_boost=rag_context_boost,
             rag_min_score=_parse_ratio("RAG_MIN_SCORE", 0.3),
             rag_candidate_multiplier=_parse_int("RAG_CANDIDATE_MULTIPLIER", 8),
             rag_excerpt_chars=_parse_int("RAG_EXCERPT_CHARS", 800),

@@ -92,3 +92,12 @@ def test_mis_response_limit_must_be_positive(monkeypatch):
 
     with pytest.raises(ConfigurationError, match="MIS_MAX_RESPONSE_BYTES"):
         Settings.from_env()
+
+
+def test_rag_context_boost_is_bounded(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("CORS_ORIGINS", "https://vodc.ru")
+    monkeypatch.setenv("RAG_CONTEXT_BOOST", "0.51")
+
+    with pytest.raises(ConfigurationError, match="RAG_CONTEXT_BOOST"):
+        Settings.from_env()

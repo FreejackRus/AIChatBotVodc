@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "model_id": "Qwen/Qwen3-Embedding-0.6B",
+  "served_name": "Qwen3-Embedding-0.6B",
+  "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+  "parameters": 595776512,
+  "dimensions": 1024,
+  "context_tokens": 8192,
+  "query_instruction": "Given a Russian-language website query, retrieve approved VODC passages that answer the query.",
+  "document_instruction": null,
+  "batch_size": 16,
+  "evidence": {
+    "source": "official Hugging Face model card",
+    "instruction_policy": "query-side instruction; documents have no instruction",
+    "supported_dimensions": "32-1024",
+    "hub_revision_verified_at": "2026-07-29"
+  }
+}

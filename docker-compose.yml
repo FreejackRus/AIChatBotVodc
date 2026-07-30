@@ -1,50 +1,362 @@
-version: '3.8'
+name: vodc-ai
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-production}
+  APP_HOST: 0.0.0.0
+  APP_PORT: 5000
+  CORS_ORIGINS: ${CORS_ORIGINS:-https://vodc.ru,https://www.vodc.ru}
+  TRUSTED_PAGE_HOSTS: ${TRUSTED_PAGE_HOSTS:-vodc.ru,www.vodc.ru}
+  SIGNING_SECRET: ${SIGNING_SECRET:?SIGNING_SECRET is required}
+  DATABASE_URL: postgresql://vodc:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/vodc
+  REDIS_URL: redis://redis:6379/0
+  PERSISTENCE_REQUIRED: "true"
+  SESSION_TTL_SECONDS: 7200
+  TRANSCRIPT_RETENTION_DAYS: 90
+  MODEL_BASE_URLS: http://vllm-primary:8000,http://vllm-secondary:8000
+  CHAT_MODEL: ${CHAT_MODEL:-Qwen3.5-9B}
+  MODEL_CONTEXT_TOKENS: 8192
+  MODEL_MAX_TOKENS: 768
+  EMBEDDING_BASE_URL: http://vllm-embedding:8000
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Qwen3-Embedding-0.6B}
+  EMBEDDING_MODEL_REVISION: ${EMBEDDING_MODEL_REVISION:-97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3}
+  EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1024}
+  EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-16}
+  RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1000}
+  RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-200}
+  RAG_TOP_K: ${RAG_TOP_K:-5}
+  RAG_DENSE_WEIGHT: ${RAG_DENSE_WEIGHT:-0.8}
+  RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.3}
+  RAG_CANDIDATE_MULTIPLIER: ${RAG_CANDIDATE_MULTIPLIER:-8}
+  RAG_EXCERPT_CHARS: ${RAG_EXCERPT_CHARS:-800}
+  SOURCE_MAX_AGE_DAYS: ${SOURCE_MAX_AGE_DAYS:-180}
+  SOURCE_MAX_BYTES: ${SOURCE_MAX_BYTES:-2000000}
+  CATALOG_AUDIT_ENABLED: ${CATALOG_AUDIT_ENABLED:-true}
+  CATALOG_AUDIT_URL: ${CATALOG_AUDIT_URL:-https://www.vodc.ru/pacientam/platnye/platnye.php}
+  CATALOG_AUDIT_MIN_SERVICES: ${CATALOG_AUDIT_MIN_SERVICES:-1000}
+  CATALOG_AUDIT_MAX_BYTES: ${CATALOG_AUDIT_MAX_BYTES:-2000000}
+  CATALOG_AUDIT_MAX_REMOVED_RATIO: ${CATALOG_AUDIT_MAX_REMOVED_RATIO:-0.2}
+  MEDANGEL_API_URL: ${MEDANGEL_API_URL:-}
+  MEDANGEL_API_KEY: ${MEDANGEL_API_KEY:-}
+  MEDANGEL_SERVICES_PATH: ${MEDANGEL_SERVICES_PATH:-/services}
+  MEDANGEL_DOCTORS_PATH: ${MEDANGEL_DOCTORS_PATH:-/doctors}
+  MEDANGEL_SLOTS_PATH: ${MEDANGEL_SLOTS_PATH:-/schedule}
+  VODC_APPOINTMENT_URL: ${VODC_APPOINTMENT_URL:-https://vodc.ru/appointment/}
+  YANDEX_METRIKA_ID: ${YANDEX_METRIKA_ID:-}
+  SOURCE_MANIFEST_PATH: /app/knowledge_base/sources.json
+  SERVICE_PRIORITIES_PATH: /app/config/service_priorities.json
+  REQUEST_TIMEOUT: 30
+  HEALTH_TIMEOUT: 3
+  MAX_MESSAGE_LENGTH: 2000
+  MAX_REQUEST_BYTES: 65536
+  RATE_LIMIT_REQUESTS: 30
+  RATE_LIMIT_WINDOW_SECONDS: 60
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
-  vodc-chatbot:
+  api:
     build: .
-    container_name: vodc-chatbot
-    ports:
-      - "5000:5000"
     environment:
-      - FLASK_HOST=0.0.0.0
-      - FLASK_PORT=5000
-      - FLASK_DEBUG=false
-      - LM_STUDIO_URL=http://host.docker.internal:1234
-      - CORS_ORIGINS=*
+      <<: *app-environment
+      MAX_WORKERS: ${MAX_WORKERS:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "5000"
     volumes:
-      - ./knowledge_base:/app/knowledge_base
-      - ./logs:/app/logs
+      - ./knowledge_base:/app/knowledge_base:ro
     restart: unless-stopped
-    networks:
-      - vodc-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    networks: [vodc]
 
-  # Опционально: nginx для проксирования
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment:
+      <<: *app-environment
+      WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-86400}
+      WORKER_RETRY_SECONDS: ${WORKER_RETRY_SECONDS:-60}
+      WORKER_METRICS_PORT: 9101
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./knowledge_base:/app/knowledge_base:ro
+    expose:
+      - "9101"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9101/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks: [vodc]
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: vodc
+      POSTGRES_USER: vodc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vodc -d vodc"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [vodc]
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory-policy
+      - volatile-ttl
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [vodc]
+
   nginx:
-    image: nginx:alpine
-    container_name: vodc-nginx
+    image: nginx:1.27-alpine
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - vodc-chatbot
+      api:
+        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - vodc-network
+    networks: [vodc]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://127.0.0.1:9090/-/healthy",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [vodc]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./ops/grafana-datasources.yml:/etc/grafana/provisioning/datasources/default.yml:ro
+      - ./ops/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/default.yml:ro
+      - ./ops/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks: [vodc]
+
+  vllm-primary:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.22.0}
+    profiles: [gpu]
+    ipc: host
+    command:
+      - --model
+      - ${CHAT_MODEL_PATH:-Qwen/Qwen3.5-9B}
+      - --served-model-name
+      - ${CHAT_MODEL:-Qwen3.5-9B}
+      - --revision
+      - ${CHAT_MODEL_REVISION:-c202236235762e1c871ad0ccb60c8ee5ba337b9a}
+      - --language-model-only
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      - --max-num-seqs
+      - ${VLLM_MAX_NUM_SEQS:-10}
+      - --kv-cache-dtype
+      - fp8_e4m3
+      - --gpu-memory-utilization
+      - ${VLLM_PRIMARY_GPU_UTILIZATION:-0.82}
+      - --no-enable-log-requests
+      - --disable-fastapi-docs
+      - --disable-uvicorn-access-log
+    ports:
+      - "127.0.0.1:${VLLM_PRIMARY_PORT:-8000}:8000"
+    volumes:
+      - model-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: ${VLLM_START_PERIOD:-10m}
+      retries: 5
+    restart: unless-stopped
+    networks: [vodc]
+
+  vllm-secondary:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.22.0}
+    profiles: [gpu]
+    ipc: host
+    command:
+      - --model
+      - ${CHAT_MODEL_PATH:-Qwen/Qwen3.5-9B}
+      - --served-model-name
+      - ${CHAT_MODEL:-Qwen3.5-9B}
+      - --revision
+      - ${CHAT_MODEL_REVISION:-c202236235762e1c871ad0ccb60c8ee5ba337b9a}
+      - --language-model-only
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN:-8192}
+      - --max-num-seqs
+      - ${VLLM_MAX_NUM_SEQS:-10}
+      - --kv-cache-dtype
+      - fp8_e4m3
+      - --gpu-memory-utilization
+      - ${VLLM_SECONDARY_GPU_UTILIZATION:-0.90}
+      - --no-enable-log-requests
+      - --disable-fastapi-docs
+      - --disable-uvicorn-access-log
+    ports:
+      - "127.0.0.1:${VLLM_SECONDARY_PORT:-8002}:8000"
+    volumes:
+      - model-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: ${VLLM_START_PERIOD:-10m}
+      retries: 5
+    restart: unless-stopped
+    networks: [vodc]
+
+  vllm-embedding:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.22.0}
+    profiles: [gpu]
+    ipc: host
+    command:
+      - --model
+      - ${EMBEDDING_MODEL_PATH:-Qwen/Qwen3-Embedding-0.6B}
+      - --served-model-name
+      - ${EMBEDDING_MODEL:-Qwen3-Embedding-0.6B}
+      - --revision
+      - ${EMBEDDING_MODEL_REVISION:-97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3}
+      - --runner
+      - pooling
+      - --max-model-len
+      - ${EMBEDDING_MAX_MODEL_LEN:-8192}
+      - --gpu-memory-utilization
+      - ${EMBEDDING_GPU_UTILIZATION:-0.12}
+      - --no-enable-log-requests
+      - --disable-fastapi-docs
+      - --disable-uvicorn-access-log
+    ports:
+      - "127.0.0.1:${VLLM_EMBEDDING_PORT:-8001}:8000"
+    volumes:
+      - model-cache:/root/.cache/huggingface
+      - vllm-cache:/root/.cache/vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: ${VLLM_START_PERIOD:-10m}
+      retries: 5
+    restart: unless-stopped
+    networks: [vodc]
+
+  dcgm-exporter:
+    image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:4.6.0-4.8.3-distroless}
+    profiles: [gpu]
+    cap_add: [SYS_ADMIN]
+    environment:
+      DCGM_EXPORTER_DEVICES_STR: g:0,1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    expose:
+      - "9400"
+    restart: unless-stopped
+    networks: [vodc]
 
 networks:
-  vodc-network:
-    driver: bridge
+  vodc:
 
 volumes:
-  vodc-logs:
-    driver: local
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+  model-cache:
+  vllm-cache:

@@ -1,262 +1,398 @@
-class ChatWidget {
+class VodcChatWidget {
     constructor() {
-        this.isMinimized = false;
-        this.isTyping = false;
-        this.apiEndpoint = 'http://localhost:5000/chat'; // Будет изменено при создании сервера
-        this.initializeElements();
+        this.apiBase = new URL('.', window.location.href).origin;
+        this.sessionId = sessionStorage.getItem('vodcChatSessionId');
+        this.selectedSlotToken = null;
+        this.busy = false;
+        this.pageContext = this.detectPageContext();
+        this.elements = this.getElements();
         this.bindEvents();
-        this.setInitialTime();
+        this.scheduleProactiveInvitation();
     }
 
-    initializeElements() {
-        this.chatWidget = document.getElementById('chatWidget');
-        this.chatToggle = document.getElementById('chatToggle');
-        this.chatHeader = document.querySelector('.chat-header');
-        this.chatBody = document.getElementById('chatBody');
-        this.chatMessages = document.getElementById('chatMessages');
-        this.messageInput = document.getElementById('messageInput');
-        this.sendBtn = document.getElementById('sendBtn');
-        this.clearBtn = document.getElementById('clearBtn');
-        this.restartBtn = document.getElementById('restartBtn');
-        this.minimizeBtn = document.getElementById('minimizeBtn');
-        this.typingIndicator = document.getElementById('typingIndicator');
+    getElements() {
+        const ids = [
+            'chatWidget', 'chatToggle', 'closeChat', 'chatMessages',
+            'quickReplies', 'typingIndicator', 'messageForm', 'messageInput',
+            'sendButton', 'restartChat', 'connectionStatus',
+            'proactiveInvite', 'closeInvite', 'acceptInvite'
+        ];
+        return Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+    }
+
+    detectPageContext() {
+        const params = new URLSearchParams(window.location.search);
+        const referrer = document.referrer || `${window.location.origin}/`;
+        let url;
+        try {
+            url = new URL(params.get('page_url') || referrer);
+        } catch {
+            url = new URL(window.location.origin);
+        }
+        return {
+            url: url.toString(),
+            title: (params.get('page_title') || document.title).slice(0, 300)
+        };
     }
 
     bindEvents() {
-        // События для сворачивания/разворачивания
-        this.chatToggle.addEventListener('click', () => this.toggleChat());
-        this.chatHeader.addEventListener('click', () => this.toggleMinimize());
-        this.minimizeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleMinimize();
+        this.elements.chatToggle.addEventListener('click', () => this.open());
+        this.elements.closeChat.addEventListener('click', () => this.close());
+        this.elements.acceptInvite.addEventListener('click', () => {
+            this.hideInvitation();
+            this.open();
         });
-
-        // События для отправки сообщений
-        this.sendBtn.addEventListener('click', () => this.sendMessage());
-        this.messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.sendMessage();
+        this.elements.closeInvite.addEventListener('click', () => this.hideInvitation());
+        this.elements.restartChat.addEventListener('click', () => this.restart());
+        this.elements.messageForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            this.sendText(this.elements.messageInput.value);
+        });
+        this.elements.messageInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                this.elements.messageForm.requestSubmit();
             }
         });
-
-        // События для управления чатом
-        this.clearBtn.addEventListener('click', () => this.clearChat());
-        this.restartBtn.addEventListener('click', () => this.restartChat());
-
-        // Автофокус при открытии
-        this.messageInput.addEventListener('focus', () => {
-            setTimeout(() => {
-                this.messageInput.scrollIntoView({ block: 'nearest' });
-            }, 100);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !this.elements.chatWidget.hidden) this.close();
+        });
+        window.addEventListener('message', (event) => {
+            if (!event.data || event.data.type !== 'vodc:page-context') return;
+            const candidate = event.data.page || {};
+            try {
+                const url = new URL(candidate.url);
+                if (!['vodc.ru', 'www.vodc.ru', 'localhost', '127.0.0.1'].includes(url.hostname)) return;
+                this.pageContext = {
+                    url: url.toString(),
+                    title: String(candidate.title || '').slice(0, 300)
+                };
+            } catch {
+                return;
+            }
         });
     }
 
-    toggleChat() {
-        const isVisible = this.chatWidget.style.display !== 'none';
-        
-        if (isVisible) {
-            this.chatWidget.style.display = 'none';
-            this.chatToggle.classList.remove('hidden');
-        } else {
-            this.chatWidget.style.display = 'flex';
-            this.chatToggle.classList.add('hidden');
-            this.messageInput.focus();
-        }
+    scheduleProactiveInvitation() {
+        if (sessionStorage.getItem('vodcInviteShown')) return;
+        window.setTimeout(() => {
+            if (!this.elements.chatWidget.hidden) return;
+            this.elements.proactiveInvite.hidden = false;
+            sessionStorage.setItem('vodcInviteShown', '1');
+            this.track('proactive_invitation_shown');
+        }, 15000);
     }
 
-    toggleMinimize() {
-        this.isMinimized = !this.isMinimized;
-        
-        if (this.isMinimized) {
-            this.chatWidget.classList.add('minimized');
-            this.chatBody.style.display = 'none';
-        } else {
-            this.chatWidget.classList.remove('minimized');
-            this.chatBody.style.display = 'flex';
-            this.messageInput.focus();
-        }
+    hideInvitation() {
+        this.elements.proactiveInvite.hidden = true;
     }
 
-    async sendMessage() {
-        const message = this.messageInput.value.trim();
-        
-        if (!message || this.isTyping) return;
+    async open() {
+        this.hideInvitation();
+        this.elements.chatWidget.hidden = false;
+        this.elements.chatToggle.hidden = true;
+        this.elements.chatToggle.setAttribute('aria-expanded', 'true');
+        if (!this.sessionId) await this.createSession();
+        this.elements.messageInput.focus();
+        this.track('widget_opened');
+    }
 
-        // Добавляем сообщение пользователя
-        this.addMessage(message, 'user');
-        this.messageInput.value = '';
-        this.messageInput.disabled = true;
-        this.sendBtn.disabled = true;
+    close() {
+        this.elements.chatWidget.hidden = true;
+        this.elements.chatToggle.hidden = false;
+        this.elements.chatToggle.setAttribute('aria-expanded', 'false');
+        this.elements.chatToggle.focus();
+    }
 
-        // Показываем индикатор набора текста
-        this.showTypingIndicator();
+    async createSession() {
+        this.setStatus('Подключение…');
+        const response = await fetch(`${this.apiBase}/api/v1/sessions`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                page_context: this.pageContext,
+                client: {
+                    locale: 'ru',
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow',
+                    privacy_notice_version: '1.0'
+                }
+            })
+        });
+        if (!response.ok) throw new Error(`Session HTTP ${response.status}`);
+        const data = await response.json();
+        this.sessionId = data.session_id;
+        sessionStorage.setItem('vodcChatSessionId', this.sessionId);
+        this.elements.chatMessages.replaceChildren();
+        this.addMessage(data.welcome, 'assistant');
+        this.renderQuickReplies(data.quick_replies);
+        this.setStatus('Готов к работе');
+    }
 
+    async restart() {
+        if (this.busy) return;
+        this.sessionId = null;
+        this.selectedSlotToken = null;
+        sessionStorage.removeItem('vodcChatSessionId');
         try {
-            // Отправляем запрос на сервер
-            const response = await this.callChatAPI(message);
-            
-            // Скрываем индикатор набора текста
-            this.hideTypingIndicator();
-            
-            // Добавляем ответ бота
-            this.addMessage(response, 'bot');
-            
-        } catch (error) {
-            console.error('Ошибка при отправке сообщения:', error);
-            this.hideTypingIndicator();
-            
-            // Показываем сообщение об ошибке
-            this.addMessage(
-                'Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз позже.',
-                'bot',
-                true
+            await this.createSession();
+        } catch {
+            this.addError('Не удалось начать новую сессию. Попробуйте позже.');
+        }
+    }
+
+    async ensureSession() {
+        if (!this.sessionId) await this.createSession();
+    }
+
+    async sendText(text) {
+        const value = String(text || '').trim();
+        if (!value || this.busy) return;
+        this.elements.messageInput.value = '';
+        this.addMessage(value, 'user');
+        await this.streamInput({type: 'text', text: value});
+    }
+
+    async sendAction(type, token) {
+        if (this.busy) return;
+        if (type === 'select_slot') this.selectedSlotToken = token;
+        await this.streamInput({type, token});
+    }
+
+    async streamInput(input) {
+        this.setBusy(true);
+        let assistantNode = null;
+        try {
+            await this.ensureSession();
+            const response = await fetch(
+                `${this.apiBase}/api/v1/sessions/${this.sessionId}/messages/stream`,
+                {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        input,
+                        client_message_id: crypto.randomUUID()
+                    })
+                }
             );
-        }
-
-        this.messageInput.disabled = false;
-        this.sendBtn.disabled = false;
-        this.messageInput.focus();
-    }
-
-    async callChatAPI(message) {
-        try {
-            const response = await fetch(this.apiEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: message,
-                    session_id: this.getSessionId()
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (response.status === 404) {
+                await this.createSession();
+                throw new Error('Сессия истекла. Повторите сообщение.');
             }
+            if (!response.ok || !response.body) throw new Error(`Chat HTTP ${response.status}`);
 
-            const data = await response.json();
-            return data.response;
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (true) {
+                const {done, value} = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), {stream: !done});
+                const frames = buffer.split('\n\n');
+                buffer = frames.pop() || '';
+                for (const frame of frames) {
+                    const parsed = this.parseSse(frame);
+                    if (!parsed) continue;
+                    if (parsed.event === 'text_delta') {
+                        if (!assistantNode) assistantNode = this.addMessage('', 'assistant');
+                        assistantNode.textContent += parsed.data.text || '';
+                        this.scrollToBottom();
+                    } else if (parsed.event === 'sources') {
+                        this.renderSources(parsed.data.items || []);
+                    } else if (parsed.event === 'cards') {
+                        this.renderCards(parsed.data.items || []);
+                    } else if (parsed.event === 'state') {
+                        const replies = [...(parsed.data.quick_replies || [])];
+                        if (parsed.data.value === 'slot_selected') replies.push('Перейти к записи');
+                        this.renderQuickReplies(replies);
+                    } else if (parsed.event === 'error') {
+                        this.addError(parsed.data.message || 'Временная ошибка');
+                    } else if (parsed.event === 'status') {
+                        this.setStatus(this.phaseLabel(parsed.data.phase));
+                    }
+                }
+                if (done) break;
+            }
         } catch (error) {
-            console.error('Ошибка при обращении к API:', error);
-            // В случае ошибки возвращаем тестовый ответ
-            return `Я получил ваш вопрос: "${message}". В реальной системе здесь будет ответ от RAG-системы ВОККДЦ.`;
+            console.error('VODC chat error', error);
+            this.addError(error.message || 'Не удалось получить ответ.');
+            this.track('widget_error', {code: 'stream_failed'});
+        } finally {
+            this.setBusy(false);
+            this.setStatus('Готов к работе');
         }
     }
 
-    addMessage(text, sender, isError = false) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${sender}-message`;
-        
-        const avatar = document.createElement('div');
-        avatar.className = 'message-avatar';
-        
-        const avatarImg = document.createElement('img');
-        avatarImg.src = sender === 'bot' 
-            ? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E"
-            : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
-        avatar.appendChild(avatarImg);
-        
-        const content = document.createElement('div');
-        content.className = 'message-content';
-        
-        const textDiv = document.createElement('div');
-        textDiv.className = 'message-text';
-        textDiv.textContent = text;
-        
-        if (isError) {
-            textDiv.style.background = '#ffebee';
-            textDiv.style.color = '#c62828';
+    parseSse(frame) {
+        let event = 'message';
+        const data = [];
+        for (const line of frame.split('\n')) {
+            if (line.startsWith('event:')) event = line.slice(6).trim();
+            if (line.startsWith('data:')) data.push(line.slice(5).trim());
         }
-        
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'message-time';
-        timeDiv.textContent = this.getCurrentTime();
-        
-        content.appendChild(textDiv);
-        content.appendChild(timeDiv);
-        
-        messageDiv.appendChild(avatar);
-        messageDiv.appendChild(content);
-        
-        this.chatMessages.appendChild(messageDiv);
+        if (!data.length) return null;
+        try {
+            return {event, data: JSON.parse(data.join('\n'))};
+        } catch {
+            return null;
+        }
+    }
+
+    phaseLabel(phase) {
+        return {
+            processing: 'Обрабатываю…',
+            retrieval: 'Ищу в источниках…',
+            generation: 'Формирую ответ…'
+        }[phase] || 'Работаю…';
+    }
+
+    addMessage(text, role) {
+        const article = document.createElement('article');
+        article.className = `message message-${role}`;
+        const body = document.createElement('div');
+        body.className = 'message-text';
+        body.textContent = text;
+        article.append(body);
+        this.elements.chatMessages.append(article);
+        this.scrollToBottom();
+        return body;
+    }
+
+    addError(text) {
+        const body = this.addMessage(text, 'error');
+        body.setAttribute('role', 'alert');
+    }
+
+    renderSources(items) {
+        if (!items.length) return;
+        const section = document.createElement('section');
+        section.className = 'sources';
+        const heading = document.createElement('strong');
+        heading.textContent = 'Официальные источники';
+        section.append(heading);
+        const list = document.createElement('ul');
+        for (const source of items.slice(0, 3)) {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = source.url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = source.title;
+            item.append(link);
+            if (source.reviewed_at) {
+                const reviewed = document.createElement('small');
+                reviewed.textContent = `Проверено: ${source.reviewed_at}`;
+                item.append(reviewed);
+            }
+            list.append(item);
+        }
+        section.append(list);
+        this.elements.chatMessages.append(section);
         this.scrollToBottom();
     }
 
-    showTypingIndicator() {
-        this.typingIndicator.classList.add('active');
+    renderCards(items) {
+        if (!items.length) return;
+        const list = document.createElement('div');
+        list.className = 'cards';
+        for (const card of items) {
+            const article = document.createElement('article');
+            article.className = `entity-card card-${card.type}`;
+            const title = document.createElement('strong');
+            title.textContent = card.title;
+            article.append(title);
+            if (card.subtitle) {
+                const subtitle = document.createElement('p');
+                subtitle.textContent = card.subtitle;
+                article.append(subtitle);
+            }
+            for (const fact of card.facts || []) {
+                const value = document.createElement('small');
+                value.textContent = fact;
+                article.append(value);
+            }
+            for (const action of card.actions || []) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'card-action';
+                button.textContent = action.label;
+                button.addEventListener('click', () => this.sendAction(action.type, action.token));
+                article.append(button);
+            }
+            list.append(article);
+        }
+        this.elements.chatMessages.append(list);
         this.scrollToBottom();
     }
 
-    hideTypingIndicator() {
-        this.typingIndicator.classList.remove('active');
+    renderQuickReplies(replies) {
+        this.elements.quickReplies.replaceChildren();
+        for (const reply of replies) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = reply;
+            button.addEventListener('click', () => {
+                if (reply === 'Перейти к записи') this.openBooking();
+                else {
+                    this.track('quick_reply_clicked');
+                    this.sendText(reply);
+                }
+            });
+            this.elements.quickReplies.append(button);
+        }
     }
 
-    clearChat() {
-        this.chatMessages.innerHTML = `
-            <div class="message bot-message">
-                <div class="message-avatar">
-                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z'/%3E%3C/svg%3E" alt="Bot">
-                </div>
-                <div class="message-content">
-                    <div class="message-text">
-                        Чат очищен. Чем могу помочь?
-                    </div>
-                    <div class="message-time">${this.getCurrentTime()}</div>
-                </div>
-            </div>
-        `;
+    async openBooking() {
+        if (!this.selectedSlotToken || !this.sessionId) return;
+        this.setBusy(true);
+        try {
+            const response = await fetch(
+                `${this.apiBase}/api/v1/sessions/${this.sessionId}/booking-link`,
+                {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({slot_token: this.selectedSlotToken})
+                }
+            );
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail?.message || 'Слот недоступен');
+            await this.track('booking_redirect_clicked');
+            window.open(data.url, '_blank', 'noopener,noreferrer');
+        } catch (error) {
+            this.addError(error.message);
+        } finally {
+            this.setBusy(false);
+        }
     }
 
-    restartChat() {
-        this.clearChat();
-        this.addMessage('Здравствуйте! Я чатбот ВОККДЦ. Чем могу помочь?', 'bot');
+    async track(type, properties = {}) {
+        if (!this.sessionId) return;
+        fetch(`${this.apiBase}/api/v1/sessions/${this.sessionId}/events`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({type, properties}),
+            keepalive: true
+        }).catch(() => {});
+        window.parent.postMessage({type: 'vodc:chat-event', event: type, properties}, '*');
+    }
+
+    setBusy(value) {
+        this.busy = value;
+        this.elements.messageInput.disabled = value;
+        this.elements.sendButton.disabled = value;
+        this.elements.typingIndicator.hidden = !value;
+        if (!value) this.elements.messageInput.focus();
+    }
+
+    setStatus(text) {
+        this.elements.connectionStatus.textContent = text;
     }
 
     scrollToBottom() {
-        setTimeout(() => {
-            this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-        }, 100);
-    }
-
-    getCurrentTime() {
-        const now = new Date();
-        return now.toLocaleTimeString('ru-RU', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        requestAnimationFrame(() => {
+            this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
         });
-    }
-
-    setInitialTime() {
-        const initialTime = document.getElementById('initialTime');
-        if (initialTime) {
-            initialTime.textContent = this.getCurrentTime();
-        }
-    }
-
-    getSessionId() {
-        // Получаем или создаем ID сессии
-        let sessionId = sessionStorage.getItem('chatSessionId');
-        if (!sessionId) {
-            sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            sessionStorage.setItem('chatSessionId', sessionId);
-        }
-        return sessionId;
-    }
-
-    // Метод для обновления API endpoint
-    setApiEndpoint(endpoint) {
-        this.apiEndpoint = endpoint;
     }
 }
 
-// Инициализация виджета при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
-    const chatWidget = new ChatWidget();
-    
-    // Делаем виджет доступным глобально для тестирования
-    window.chatWidget = chatWidget;
-    
-    console.log('Виджет чатбота ВОККДЦ инициализирован');
+    window.vodcChatWidget = new VodcChatWidget();
 });

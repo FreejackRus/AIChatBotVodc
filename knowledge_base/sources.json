@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "sources": [
+    {
+      "filename": "vodc_about.md",
+      "title": "О ВОККДЦ",
+      "url": "https://vodc.ru/about/",
+      "owner": "ВОККДЦ",
+      "reviewed_at": "2026-07-29",
+      "local_path": "vodc_about.md",
+      "enabled": true
+    },
+    {
+      "filename": "vodc_contacts.md",
+      "title": "Контакты ВОККДЦ",
+      "url": "https://vodc.ru/contacts/",
+      "owner": "ВОККДЦ",
+      "reviewed_at": "2026-07-29",
+      "local_path": "vodc_contacts.md",
+      "enabled": true
+    },
+    {
+      "filename": "vodc_lab_preparation.md",
+      "title": "Подготовка к лабораторным исследованиям",
+      "url": "https://vodc.ru/podgotovka-k-issledovaniyam/podgotovka-k-laboratornym-issledovaniyam/",
+      "owner": "ВОККДЦ",
+      "reviewed_at": "2026-07-29",
+      "local_path": "vodc_lab_preparation.md",
+      "enabled": true
+    }
+  ]
+}

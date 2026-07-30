@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.env
+.env.production
+logs
+conversations
+ssl
+tests
+test_*.py
+integration_test_results.md

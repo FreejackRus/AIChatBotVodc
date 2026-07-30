@@ -2,7 +2,6 @@
 
 import os
 
-
 bind = os.getenv("GUNICORN_BIND", "0.0.0.0:5000")
 workers = int(os.getenv("MAX_WORKERS", "2"))
 worker_class = "uvicorn.workers.UvicornWorker"

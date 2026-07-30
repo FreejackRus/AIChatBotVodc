@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -44,7 +44,7 @@ def test_local_rag_rejects_indirect_prompt_injection(tmp_path):
                         "title": "О центре",
                         "url": "https://vodc.ru/about/",
                         "owner": "ВОККДЦ",
-                        "reviewed_at": date.today().isoformat(),
+                        "reviewed_at": datetime.now(UTC).date().isoformat(),
                         "local_path": "about.md",
                     }
                 ],

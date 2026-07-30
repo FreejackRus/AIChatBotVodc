@@ -54,7 +54,7 @@ class PreparedSource:
 
 def _parse_date(value: Any, field: str) -> date:
     if not isinstance(value, str):
-        raise ValueError(f"{field} должен быть датой ISO YYYY-MM-DD")
+        raise TypeError(f"{field} должен быть датой ISO YYYY-MM-DD")
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
@@ -81,7 +81,7 @@ def load_manifest(path: Path) -> list[ManifestSource]:
     today = datetime.now(timezone.utc).date()
     for index, item in enumerate(data["sources"]):
         if not isinstance(item, dict):
-            raise ValueError(f"sources[{index}] должен быть объектом")
+            raise TypeError(f"sources[{index}] должен быть объектом")
         required = ("filename", "title", "url", "owner", "reviewed_at")
         missing = [field for field in required if not str(item.get(field, "")).strip()]
         if missing:
@@ -124,7 +124,7 @@ def load_manifest(path: Path) -> list[ManifestSource]:
             raise ValueError(f"sources[{index}].local_path небезопасен")
         enabled = item.get("enabled", True)
         if not isinstance(enabled, bool):
-            raise ValueError(f"sources[{index}].enabled должен быть boolean")
+            raise TypeError(f"sources[{index}].enabled должен быть boolean")
 
         source = ManifestSource(
             filename=filename,
@@ -277,7 +277,7 @@ class KnowledgeIngestion:
             for row in ordered:
                 values = row.get("embedding") if isinstance(row, dict) else None
                 if not isinstance(values, list):
-                    raise ValueError("Embedding API вернул некорректный вектор")
+                    raise TypeError("Embedding API вернул некорректный вектор")
                 vector = tuple(float(value) for value in values)
                 if len(vector) != self.embedding_dimensions:
                     raise ValueError(

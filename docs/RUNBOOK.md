@@ -1,5 +1,11 @@
 # Runbook
 
+## Репозиторный CI
+
+Каждый PR обязан пройти quality и PostgreSQL/pgvector migration jobs из
+`.github/workflows/ci.yml`. Migration job применяет все SQL дважды.
+Подробный состав и границы CI описаны в `docs/CI_GATES.md`.
+
 ## Запуск и обновление
 
 ```bash

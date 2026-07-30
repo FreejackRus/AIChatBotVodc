@@ -1,6 +1,6 @@
-import json
 import hashlib
-from datetime import date, timedelta
+import json
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -12,6 +12,10 @@ from app.ingestion import (
     load_manifest,
     normalize_content,
 )
+
+
+def _today():
+    return datetime.now(UTC).date()
 
 
 class AsyncContext:
@@ -70,7 +74,7 @@ def _source(**overrides):
         "title": "О центре",
         "url": "https://vodc.ru/about/",
         "owner": "ВОККДЦ",
-        "reviewed_at": date.today().isoformat(),
+        "reviewed_at": _today().isoformat(),
         "local_path": "about.md",
         "enabled": True,
     }
@@ -105,7 +109,7 @@ def test_manifest_rejects_future_review_and_expires_old_sources(tmp_path):
         manifest,
         [
             _source(
-                reviewed_at=(date.today() + timedelta(days=1)).isoformat(),
+                reviewed_at=(_today() + timedelta(days=1)).isoformat(),
             )
         ],
     )
@@ -114,7 +118,7 @@ def test_manifest_rejects_future_review_and_expires_old_sources(tmp_path):
 
     _write_manifest(
         manifest,
-        [_source(reviewed_at=(date.today() - timedelta(days=181)).isoformat())],
+        [_source(reviewed_at=(_today() - timedelta(days=181)).isoformat())],
     )
     source = load_manifest(manifest)[0]
     assert source.active(180) is False
@@ -206,7 +210,7 @@ async def test_ingestion_embeds_before_atomic_database_update(monkeypatch, tmp_p
         title="Контакты",
         url="https://vodc.ru/contacts/",
         owner="ВОККДЦ",
-        reviewed_at=date.today(),
+        reviewed_at=_today(),
         local_path="contacts.md",
     )
     timeline = []
@@ -268,7 +272,7 @@ async def test_ingestion_rejects_indirect_prompt_injection_before_embedding_or_w
         title="О центре",
         url="https://vodc.ru/about/",
         owner="ВОККДЦ",
-        reviewed_at=date.today(),
+        reviewed_at=_today(),
         local_path="about.md",
     )
     timeline = []
@@ -311,7 +315,7 @@ async def test_unchanged_source_skips_embedding_and_chunk_replacement(
         title="Контакты",
         url="https://vodc.ru/contacts/",
         owner="ВОККДЦ",
-        reviewed_at=date.today(),
+        reviewed_at=_today(),
         local_path="contacts.md",
     )
     existing = [

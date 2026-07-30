@@ -12,7 +12,6 @@ from scripts.inference_smoke import (
     probe_embedding,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

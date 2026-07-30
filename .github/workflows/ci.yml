@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Python, policies and Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit and contract tests
+        run: pytest -q
+
+      - name: Architecture boundaries
+        run: python scripts/check_architecture.py
+
+      - name: Safety and privacy policies
+        run: python scripts/run_policy_evals.py
+
+      - name: Compose configuration
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          SIGNING_SECRET: ci-signing-secret-at-least-32-bytes
+          GRAFANA_ADMIN_PASSWORD: ci-grafana-password
+        run: docker compose config --quiet
+
+  migrations:
+    name: PostgreSQL and pgvector migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: vodc
+          POSTGRES_USER: vodc
+          POSTGRES_PASSWORD: vodc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vodc -d vodc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply migrations twice and inspect schema
+        env:
+          DATABASE_URL: postgresql://vodc:vodc@127.0.0.1:5432/vodc
+        run: scripts/check_migrations.sh

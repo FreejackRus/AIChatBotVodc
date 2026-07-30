@@ -19,11 +19,12 @@ flowchart LR
     P --> H[Human review]
     H -->|approved| V[Approved staged version]
     H -->|rejected| J[Rejected]
-    V -. отдельный будущий publish gate .-> RAG[Active RAG]
+    V -. explicit controlled publisher .-> RAG[Active RAG]
 ```
 
-Даже статус `approved` означает только согласованную staging-версию. В
-текущем этапе отсутствует автоматический переход в активный RAG.
+Даже статус `approved` означает только согласованную staging-версию.
+Переход в активный RAG выполняется отдельно и только явной командой
+controlled publisher.
 
 ## Источники обнаружения
 
@@ -118,7 +119,8 @@ DATABASE_URL='postgresql://...' .venv/bin/python \
 - `vodc_source_staging_created`;
 - `vodc_source_staging_quarantined`.
 
-Следующий отдельный этап — controlled publisher: преобразование только
-approved-версий в смысловые chunks, evaluation diff, атомарная активация и
-rollback. До его реализации активный RAG продолжает использовать только
-ручной `knowledge_base/sources.json`.
+Controlled publisher реализован отдельно и описан в
+`docs/CONTROLLED_PUBLISHER.md`. Он запускается только явной командой,
+сохраняет immutable embedding snapshots и поддерживает rollback. До
+запуска publisher активный RAG продолжает использовать только ручной
+`knowledge_base/sources.json`.

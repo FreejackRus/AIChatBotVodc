@@ -60,6 +60,11 @@ flowchart LR
 Новые версии сохраняются отдельно и не доступны retrieval до отдельного
 controlled publish gate. Контракт описан в `docs/SOURCE_STAGING.md`.
 
+Approved staging-версии активируются только ручным controlled publisher.
+Он защищает manual URL, проверяет роль медицинского владельца, создаёт
+immutable embedding snapshot и поддерживает атомарный rollback. Подробности
+в `docs/CONTROLLED_PUBLISHER.md`.
+
 ## Индексация
 
 Миграция `002_knowledge_pipeline.sql` добавляет:

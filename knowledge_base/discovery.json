@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "seeds": [
+    {
+      "url": "https://vodc.ru/about/",
+      "source_type": "organizational",
+      "risk_tier": "low",
+      "owner": "ВОККДЦ",
+      "discover_prefix": null
+    },
+    {
+      "url": "https://vodc.ru/contacts/",
+      "source_type": "organizational",
+      "risk_tier": "low",
+      "owner": "ВОККДЦ",
+      "discover_prefix": null
+    },
+    {
+      "url": "https://vodc.ru/podgotovka-k-issledovaniyam/",
+      "source_type": "preparation",
+      "risk_tier": "medical",
+      "owner": "Медицинский ответственный ВОККДЦ",
+      "discover_prefix": "/podgotovka-k-issledovaniyam/",
+      "discovery_only": true
+    }
+  ]
+}

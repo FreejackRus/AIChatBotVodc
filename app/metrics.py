@@ -95,3 +95,16 @@ CATALOG_AUDIT_ISSUES = Gauge(
     "vodc_catalog_audit_issues",
     "Issues in the latest completed catalogue audit.",
 )
+SOURCE_STAGING_RUNS = Counter(
+    "vodc_source_staging_runs_total",
+    "Semantic source staging runs by result.",
+    ("result",),
+)
+SOURCE_STAGING_CREATED = Gauge(
+    "vodc_source_staging_created",
+    "New semantic source versions in the latest staging run.",
+)
+SOURCE_STAGING_QUARANTINED = Gauge(
+    "vodc_source_staging_quarantined",
+    "Quarantined semantic source versions in the latest staging run.",
+)

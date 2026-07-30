@@ -55,6 +55,11 @@ flowchart LR
 доступны оркестратору и не попадают в embeddings. Контракт и порядок
 разбора описаны в `docs/CATALOG_AUTOMATION.md`.
 
+Дополнительно реализован автоматический review-gated staging
+организационных страниц, материалов подготовки и detail-страниц услуг.
+Новые версии сохраняются отдельно и не доступны retrieval до отдельного
+controlled publish gate. Контракт описан в `docs/SOURCE_STAGING.md`.
+
 ## Индексация
 
 Миграция `002_knowledge_pipeline.sql` добавляет:

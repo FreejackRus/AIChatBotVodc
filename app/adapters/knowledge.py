@@ -13,7 +13,7 @@ import httpx
 from ..domain.models import SourceRef
 from ..domain.safety import contains_prompt_injection
 from ..ingestion import ManifestSource, chunk_text, load_manifest
-from ..metrics import RAG_SEARCHES, RAG_SEARCH_SECONDS
+from ..metrics import RAG_SEARCH_SECONDS, RAG_SEARCHES
 from ..ports import KnowledgeUnavailable
 
 QUERY_INSTRUCTION = (

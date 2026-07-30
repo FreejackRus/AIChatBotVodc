@@ -318,6 +318,7 @@ class KnowledgeIngestion:
                 SELECT s.url, s.content_hash, s.embedding_model,
                        s.embedding_revision,
                        s.embedding_dimensions, s.chunk_size, s.chunk_overlap,
+                       s.origin,
                        count(c.id)::integer AS chunk_count
                 FROM knowledge_sources s
                 LEFT JOIN knowledge_chunks c ON c.source_id = s.id
@@ -345,6 +346,10 @@ class KnowledgeIngestion:
                 if not chunks:
                     raise ValueError(f"Источник {source.filename} не дал ни одного чанка")
                 current = existing.get(source.url)
+                if current and current.get("origin", "manual") == "staged":
+                    raise ValueError(
+                        f"Manual manifest конфликтует со staged source: {source.url}"
+                    )
                 changed = not current or any(
                     (
                         current["content_hash"] != content_hash,
@@ -384,7 +389,11 @@ class KnowledgeIngestion:
 
             async with pool.acquire() as connection, connection.transaction():
                 await connection.execute(
-                    "UPDATE knowledge_sources SET enabled = false, last_checked_at = $1",
+                    """
+                    UPDATE knowledge_sources
+                    SET enabled = false, last_checked_at = $1
+                    WHERE origin = 'manual'
+                    """,
                     now,
                 )
                 for source in sources:

@@ -80,7 +80,34 @@ docker compose exec -T postgres psql -U vodc -d vodc -c \
 
 Разобрать `quarantined` до рассмотрения `pending_review`. Утверждать
 медицинский материал может только назначенный медицинский ответственный.
-Даже approved staging-версия не публикуется в RAG на текущем этапе.
+Approved staging-версия не публикуется в RAG автоматически.
+
+## Controlled publish и rollback
+
+Сначала выполнить dry-run:
+
+```bash
+docker compose run --rm worker python scripts/publish_staged_sources.py --limit 10
+```
+
+После проверки плана:
+
+```bash
+docker compose run --rm worker python scripts/publish_staged_sources.py \
+  --apply --limit 10 --actor 'Фамилия И.О.'
+.venv/bin/python scripts/evaluate_retrieval.py \
+  /secure/retrieval_gold.json --k 5 --minimum-recall 0.90
+```
+
+При провале retrieval gate немедленно восстановить предыдущий snapshot:
+
+```bash
+docker compose run --rm worker python scripts/publish_staged_sources.py \
+  --rollback-url 'https://vodc.ru/path/' --actor 'Фамилия И.О.'
+```
+
+Publisher никогда не запускается автоматически worker-циклом. Полный
+контракт находится в `docs/CONTROLLED_PUBLISHER.md`.
 
 ## Деградация
 

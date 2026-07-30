@@ -125,6 +125,11 @@ class Settings:
     catalog_audit_min_services: int
     catalog_audit_max_bytes: int
     catalog_audit_max_removed_ratio: float
+    source_discovery_manifest_path: Path
+    source_staging_enabled: bool
+    source_staging_batch_size: int
+    source_staging_delay_ms: int
+    source_staging_max_bytes: int
     request_timeout: float
     health_timeout: float
     session_ttl_seconds: int
@@ -180,6 +185,16 @@ class Settings:
         if not service_priorities_path.is_absolute():
             service_priorities_path = (
                 Path(__file__).resolve().parent / service_priorities_path
+            )
+        source_discovery_manifest_path = Path(
+            os.getenv(
+                "SOURCE_DISCOVERY_MANIFEST_PATH",
+                "knowledge_base/discovery.json",
+            )
+        ).expanduser()
+        if not source_discovery_manifest_path.is_absolute():
+            source_discovery_manifest_path = (
+                Path(__file__).resolve().parent / source_discovery_manifest_path
             )
 
         model_urls = _csv("MODEL_BASE_URLS", "http://localhost:8000")
@@ -271,6 +286,17 @@ class Settings:
             ),
             catalog_audit_max_removed_ratio=_parse_ratio(
                 "CATALOG_AUDIT_MAX_REMOVED_RATIO", 0.2
+            ),
+            source_discovery_manifest_path=source_discovery_manifest_path,
+            source_staging_enabled=_parse_bool("SOURCE_STAGING_ENABLED", False),
+            source_staging_batch_size=_parse_int(
+                "SOURCE_STAGING_BATCH_SIZE", 25
+            ),
+            source_staging_delay_ms=_parse_int(
+                "SOURCE_STAGING_DELAY_MS", 500, minimum=0
+            ),
+            source_staging_max_bytes=_parse_int(
+                "SOURCE_STAGING_MAX_BYTES", 2_000_000
             ),
             request_timeout=_parse_float("REQUEST_TIMEOUT", 30.0),
             health_timeout=_parse_float("HEALTH_TIMEOUT", 2.0),

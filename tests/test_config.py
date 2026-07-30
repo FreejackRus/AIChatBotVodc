@@ -35,3 +35,10 @@ def test_catalog_audit_url_is_restricted_to_vodc(monkeypatch):
     monkeypatch.setenv("CATALOG_AUDIT_URL", "https://evil.example/prices")
     with pytest.raises(ConfigurationError, match="vodc.ru"):
         Settings.from_env()
+
+
+def test_source_staging_delay_may_be_zero(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://vodc.ru")
+    monkeypatch.setenv("SOURCE_STAGING_DELAY_MS", "0")
+
+    assert Settings.from_env().source_staging_delay_ms == 0

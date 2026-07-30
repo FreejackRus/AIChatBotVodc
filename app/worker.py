@@ -18,7 +18,11 @@ from .metrics import (
     CATALOG_AUDIT_SERVICES,
     KNOWLEDGE_INGESTION_CHUNKS,
     KNOWLEDGE_INGESTION_RUNS,
+    SOURCE_STAGING_CREATED,
+    SOURCE_STAGING_QUARANTINED,
+    SOURCE_STAGING_RUNS,
 )
+from .source_staging import SemanticSourceStager
 
 logger = logging.getLogger("vodc_worker")
 
@@ -58,6 +62,45 @@ async def _audit_public_catalog(settings) -> None:
         )
     finally:
         await auditor.close()
+
+
+async def _stage_semantic_sources(settings) -> None:
+    stager = SemanticSourceStager(
+        settings.database_url,
+        settings.source_discovery_manifest_path,
+        timeout=settings.request_timeout,
+        maximum_bytes=settings.source_staging_max_bytes,
+        batch_size=settings.source_staging_batch_size,
+        delay_ms=settings.source_staging_delay_ms,
+    )
+    try:
+        result = await stager.run()
+    except Exception:
+        SOURCE_STAGING_RUNS.labels("error").inc()
+        logger.exception(
+            "Semantic source staging failed; active RAG is unchanged"
+        )
+    else:
+        SOURCE_STAGING_RUNS.labels(result["status"]).inc()
+        SOURCE_STAGING_CREATED.set(result["created"])
+        SOURCE_STAGING_QUARANTINED.set(result["quarantined"])
+        logger.info(
+            (
+                "Semantic source staging completed: status=%s registered=%s "
+                "checked=%s created=%s unchanged=%s quarantined=%s "
+                "discovered=%s errors=%s"
+            ),
+            result["status"],
+            result["registered"],
+            result["checked"],
+            result["created"],
+            result["unchanged"],
+            result["quarantined"],
+            result["discovered"],
+            result["errors"],
+        )
+    finally:
+        await stager.close()
 
 
 async def cycle() -> None:
@@ -105,6 +148,8 @@ async def cycle() -> None:
     finally:
         if settings.catalog_audit_enabled:
             await _audit_public_catalog(settings)
+        if settings.source_staging_enabled:
+            await _stage_semantic_sources(settings)
 
 
 async def run(once: bool) -> None:

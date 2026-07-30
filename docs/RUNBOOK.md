@@ -66,6 +66,22 @@ docker compose exec -T postgres psql -U vodc -d vodc -c \
 прейскуранта и контракт МИС. При штатном изменении порогов сначала обновить
 тесты и выполнить один ручной audit-only цикл.
 
+## Staging источников
+
+Semantic source staging выполняется после аудита каталога и не изменяет
+активный RAG. Контроль последнего запуска:
+
+```bash
+docker compose exec -T postgres psql -U vodc -d vodc -c \
+  "SELECT completed_at, status, stats FROM source_stage_runs ORDER BY completed_at DESC LIMIT 5"
+docker compose exec -T postgres psql -U vodc -d vodc -c \
+  "SELECT review_status, count(*) FROM source_versions GROUP BY review_status"
+```
+
+Разобрать `quarantined` до рассмотрения `pending_review`. Утверждать
+медицинский материал может только назначенный медицинский ответственный.
+Даже approved staging-версия не публикуется в RAG на текущем этапе.
+
 ## Деградация
 
 - Одна vLLM-реплика недоступна: gateway продолжает round-robin; ошибочный

@@ -115,13 +115,43 @@ PostgreSQL строит два ограниченных набора канди�
 Итоговый score:
 
 ```text
-0.8 × dense_similarity + 0.2 × normalized_lexical_rank
+0.8 × dense_similarity
++ 0.2 × normalized_lexical_rank
++ 0.15 для утверждённого источника текущей страницы
 ```
 
 Порог по умолчанию — `0.3`, число кандидатов — `limit × 8`. В результат
 попадают только включённые, непросроченные источники нужной версии
 embedding. Размер excerpt увеличен до 800 символов, чтобы LLM получала
 содержательный проверенный контекст.
+
+### Контекст текущей страницы
+
+Виджет передаёт свежий `page_context` при каждом сообщении, поэтому переход
+между страницами не требует новой chat-сессии. Backend принимает HTTP только
+для local development; страницы VODC обязаны использовать HTTPS без
+credentials и нестандартного порта. Query и fragment удаляются.
+
+В retrieval передаётся только URL. Клиентские `title`, `entity_type` и
+`entity_id` не участвуют в ranking. URL приводится к comparison key:
+
+- `www.vodc.ru` и `vodc.ru` считаются одним host;
+- query, fragment и завершающий `/` не учитываются;
+- URL вне HTTPS allowlist VODC не создаёт контекстного кандидата.
+
+PostgreSQL добавляет лучшие по dense similarity чанки текущего активного
+источника к общим dense/lexical кандидатам. После этого точное canonical
+совпадение получает `RAG_CONTEXT_BOOST=0.15`. Boost ограничен значением
+`0.5`, не является фильтром и не мешает более релевантному глобальному
+источнику занять первое место. Если текущая страница не опубликована в RAG
+или не проходит threshold, возвращаются обычные глобальные результаты.
+
+Локальный lexical fallback повторяет те же правила. Он может ответить на
+контекстную формулировку вроде «Что здесь?», но не загружает содержимое
+страницы в момент запроса: использовать можно только утверждённый snapshot.
+
+Метрика `vodc_rag_context_total{result}` различает `hit`, `fallback` и
+`unavailable`; график добавлен в dashboard `VODC knowledge and RAG`.
 
 Без PostgreSQL используется read-only lexical fallback непосредственно над
 теми же локальными snapshots. Старый embedding JSON удалён как
@@ -160,6 +190,9 @@ embedding. Размер excerpt увеличен до 800 символов, чт
 - hybrid SQL ограничивает источники по freshness/model/dimension;
 - динамические данные МИС отсутствуют в snapshots;
 - local fallback и production retrieval покрыты тестами;
+- page context обновляется на каждом сообщении и влияет только через
+  canonical URL утверждённого источника;
+- ограниченный context boost не подавляет релевантный global fallback;
 - RAG latency/result и ingestion result/chunks доступны в Prometheus.
 
 Внешний gate:

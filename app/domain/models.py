@@ -37,6 +37,13 @@ class PageContext:
     entity_id: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RetrievalContext:
+    """Untrusted page URL; adapters match it only to approved source URLs."""
+
+    page_url: str
+
+
 @dataclass(slots=True)
 class ChatMessage:
     role: str
@@ -66,6 +73,10 @@ class ChatSession:
     def add_message(self, role: str, content: str) -> None:
         self.messages.append(ChatMessage(role=role, content=content))
         self.messages = self.messages[-20:]
+        self.updated_at = utcnow_iso()
+
+    def update_page_context(self, page_context: PageContext) -> None:
+        self.page_context = page_context
         self.updated_at = utcnow_iso()
 
     def history(self) -> list[dict[str, str]]:

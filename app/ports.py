@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from .domain.models import (
     ChatSession,
     Doctor,
+    RetrievalContext,
     Service,
     Slot,
     SourceRef,
@@ -58,7 +59,12 @@ class EventStore(Protocol):
 
 
 class KnowledgePort(Protocol):
-    async def search(self, query: str, limit: int) -> list[SourceRef]: ...
+    async def search(
+        self,
+        query: str,
+        limit: int,
+        context: RetrievalContext | None = None,
+    ) -> list[SourceRef]: ...
     async def ping(self) -> bool: ...
     async def close(self) -> None: ...
 

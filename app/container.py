@@ -67,6 +67,7 @@ def build_container(settings: Settings) -> ApplicationContainer:
             settings.rag_candidate_multiplier,
             settings.source_max_age_days,
             settings.rag_excerpt_chars,
+            context_boost=settings.rag_context_boost,
         )
         if settings.database_url
         else LocalKnowledgeAdapter(
@@ -76,6 +77,7 @@ def build_container(settings: Settings) -> ApplicationContainer:
             settings.source_max_age_days,
             settings.source_max_bytes,
             settings.rag_excerpt_chars,
+            context_boost=settings.rag_context_boost,
         )
     )
     model = VLLMModelGateway(

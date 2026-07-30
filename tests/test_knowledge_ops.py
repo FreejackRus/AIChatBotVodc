@@ -24,6 +24,7 @@ def test_knowledge_migration_and_observability_are_wired():
     assert 'targets: ["worker:9101"]' in prometheus
     assert "VodcKnowledgeIngestionFailed" in alerts
     assert dashboard["uid"] == "vodc-knowledge"
-    assert len(dashboard["panels"]) == 5
+    assert len(dashboard["panels"]) == 6
+    assert "vodc_rag_context_total" in json.dumps(dashboard)
     assert embedding["dimensions"] == 1024
     assert embedding["document_instruction"] is None

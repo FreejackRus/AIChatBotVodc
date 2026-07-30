@@ -39,6 +39,7 @@ from .schemas import (
     ClientEventRequest,
     CreateSessionRequest,
     MessageRequest,
+    PageContextRequest,
     SessionResponse,
 )
 from .security import InvalidActionToken
@@ -50,11 +51,41 @@ WELCOME = (
     "Помогу найти услугу, врача, подготовку и перейти к записи. "
     "Я не ставлю диагнозы и не назначаю лечение."
 )
+LOCAL_PAGE_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 
 def _sse(event: str, data: dict) -> str:
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _safe_page_context(
+    payload: PageContextRequest,
+    trusted_hosts: tuple[str, ...],
+) -> PageContext:
+    parsed = urlparse(str(payload.url))
+    host = (parsed.hostname or "").lower()
+    if (
+        host not in trusted_hosts
+        or parsed.username
+        or parsed.password
+        or (host not in LOCAL_PAGE_HOSTS and parsed.scheme != "https")
+        or (host not in LOCAL_PAGE_HOSTS and parsed.port not in {None, 443})
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "untrusted_page_context",
+                "message": "Контекст страницы не относится к доверенному сайту",
+            },
+        )
+    safe_page_url = urlunparse(parsed._replace(query="", fragment=""))
+    return PageContext(
+        url=safe_page_url,
+        title=payload.title,
+        entity_type=payload.entity_type,
+        entity_id=payload.entity_id,
+    )
 
 
 def create_app(container: ApplicationContainer | None = None) -> FastAPI:
@@ -139,15 +170,10 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         status_code=status.HTTP_201_CREATED,
     )
     async def create_session(payload: CreateSessionRequest, request: Request):
-        host = (urlparse(str(payload.page_context.url)).hostname or "").lower()
-        if host not in settings.trusted_page_hosts:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "untrusted_page_context",
-                    "message": "Контекст страницы не относится к доверенному сайту",
-                },
-            )
+        page_context = _safe_page_context(
+            payload.page_context,
+            settings.trusted_page_hosts,
+        )
         client_ip = request.client.host if request.client else "unknown"
         allowed = await application_container.sessions.allow_request(
             f"session:{client_ip}",
@@ -162,16 +188,9 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
                     "message": "Слишком много запросов",
                 },
             )
-        parsed_page_url = urlparse(str(payload.page_context.url))
-        safe_page_url = urlunparse(parsed_page_url._replace(query="", fragment=""))
         session = ChatSession(
             id=str(uuid.uuid4()),
-            page_context=PageContext(
-                url=safe_page_url,
-                title=payload.page_context.title,
-                entity_type=payload.page_context.entity_type,
-                entity_id=payload.page_context.entity_id,
-            ),
+            page_context=page_context,
         )
         await application_container.sessions.create(session)
         CHAT_SESSIONS.inc()
@@ -233,6 +252,13 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
                     "code": "duplicate_message",
                     "message": "Сообщение с таким client_message_id уже обработано",
                 },
+            )
+        if payload.page_context is not None:
+            session.update_page_context(
+                _safe_page_context(
+                    payload.page_context,
+                    settings.trusted_page_hosts,
+                )
             )
         session.processed_client_message_ids.append(payload.client_message_id)
         session.processed_client_message_ids = session.processed_client_message_ids[

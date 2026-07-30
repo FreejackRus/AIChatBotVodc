@@ -7,6 +7,7 @@ from app.adapters.knowledge import (
     QUERY_INSTRUCTION,
     PostgresKnowledgeAdapter,
 )
+from app.domain.models import RetrievalContext
 from app.ports import KnowledgeUnavailable
 
 
@@ -25,6 +26,7 @@ class FakePool:
                 "url": "https://vodc.ru/contacts/",
                 "content": "Главный корпус находится на площади Ленина, 5а.",
                 "reviewed_at": "2026-07-29",
+                "context_match": True,
                 "score": 0.91,
             }
         ]
@@ -68,7 +70,13 @@ async def test_postgres_search_is_hybrid_current_and_instruction_aware():
 
     await adapter.http.aclose()
     adapter.http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    result = await adapter.search("Где находится центр?", 5)
+    result = await adapter.search(
+        "Где находится центр?",
+        5,
+        RetrievalContext(
+            page_url="https://www.vodc.ru/contacts/?utm_source=chat#phone"
+        ),
+    )
     await adapter.close()
 
     assert result[0].url == "https://vodc.ru/contacts/"
@@ -76,10 +84,15 @@ async def test_postgres_search_is_hybrid_current_and_instruction_aware():
     assert bodies[0]["input"].endswith("Где находится центр?")
     assert "WITH dense AS" in pool.query
     assert "lexical AS" in pool.query
+    assert "contextual AS" in pool.query
+    assert "context_match" in pool.query
+    assert "$12::double precision" in pool.query
     assert "plainto_tsquery('russian'" in pool.query
     assert "s.reviewed_at >= current_date" in pool.query
     assert pool.args[3] == 40
     assert pool.args[4] == 0.3
+    assert pool.args[10] == "https://vodc.ru/contacts"
+    assert pool.args[11] == 0.15
 
 
 @pytest.mark.asyncio

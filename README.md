@@ -14,6 +14,7 @@
 - Redis-сессии с TTL 2 часа;
 - локальная очистка ПДн и хранение обезличенных данных 90 дней;
 - PostgreSQL/pgvector и worker управляемой индексации;
+- page-aware hybrid retrieval по canonical URL утверждённого источника;
 - OpenAI-compatible vLLM gateway с двумя репликами;
 - узкий адаптер API «МедАнгел» и безопасный fallback;
 - адаптивный WCAG-ориентированный виджет;

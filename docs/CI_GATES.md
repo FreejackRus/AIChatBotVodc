@@ -31,6 +31,12 @@ TTFT и load gates выполняются на целевом сервере.
 - проверяет тип `knowledge_chunks.embedding = vector(1024)`;
 - проверяет безопасный default `knowledge_sources.origin = manual`.
 
+После миграций job устанавливает Python dependencies и выполняет
+`tests/test_postgres_context_integration.py` на той же реальной
+PostgreSQL/pgvector. Тест создаёт временный утверждённый источник, выполняет
+production SQL page-aware retrieval, проверяет canonical `www` mapping и
+точный context boost, затем удаляет тестовые данные.
+
 Локальный запуск при доступном PostgreSQL:
 
 ```bash

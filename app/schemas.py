@@ -54,6 +54,7 @@ class MessageInput(BaseModel):
 class MessageRequest(BaseModel):
     input: MessageInput
     client_message_id: Annotated[str, Field(min_length=1, max_length=100)]
+    page_context: PageContextRequest | None = None
 
 
 AllowedEvent = Literal[

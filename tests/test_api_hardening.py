@@ -20,13 +20,16 @@ def parse_sse(response):
     return events
 
 
-def post_input(client, session_id, input_payload):
+def post_input(client, session_id, input_payload, page_context=None):
+    payload = {
+        "input": input_payload,
+        "client_message_id": str(uuid.uuid4()),
+    }
+    if page_context is not None:
+        payload["page_context"] = page_context
     return client.post(
         f"/api/v1/sessions/{session_id}/messages/stream",
-        json={
-            "input": input_payload,
-            "client_message_id": str(uuid.uuid4()),
-        },
+        json=payload,
     )
 
 
@@ -59,6 +62,50 @@ def test_new_api_streams_sources_cards_state_and_drops_legacy(api, create_sessio
     assert event_data(events, "state")[0]["value"] == "service_shortlist"
     assert event_data(events, "done")
     assert api["model"].calls == 0
+
+
+def test_message_refreshes_page_context_without_polluting_retrieval_query(
+    api, create_session
+):
+    session_id = create_session()["session_id"]
+
+    response = post_input(
+        api["client"],
+        session_id,
+        {"type": "text", "text": "Где находится центр?"},
+        {
+            "url": "https://www.vodc.ru/contacts/?utm_source=chat#phone",
+            "title": "Недоверенный клиентский заголовок",
+        },
+    )
+
+    assert response.status_code == 200
+    session = asyncio.run(api["container"].sessions.get(session_id))
+    assert session.page_context.url == "https://www.vodc.ru/contacts/"
+    query, context = api["container"].knowledge.queries[-1]
+    assert query == "Где находится центр?"
+    assert "contacts" not in query
+    assert context.page_url == "https://www.vodc.ru/contacts/"
+    assert not hasattr(context, "title")
+
+
+def test_message_rejects_insecure_or_credentialed_page_context(
+    api, create_session
+):
+    session_id = create_session()["session_id"]
+    for url in (
+        "http://vodc.ru/contacts/",
+        "https://user:password@vodc.ru/contacts/",
+        "https://vodc.ru:444/contacts/",
+    ):
+        response = post_input(
+            api["client"],
+            session_id,
+            {"type": "text", "text": "Контакты"},
+            {"url": url, "title": "Контакты"},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "untrusted_page_context"
 
 
 def test_card_actions_are_signed_and_booking_is_live_validated(api, create_session):
